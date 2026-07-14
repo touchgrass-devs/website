@@ -1,0 +1,6 @@
+{
+  "name": "touchgrass.DEVS",
+  "description": "An ultra-premium, high-performance service and design platform for touchgrass.DEVS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

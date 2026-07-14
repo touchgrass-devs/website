@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght=0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:ital,wght=0,300;0,400;0,500;0,600;1,400&family=Playfair+Display:ital,wght=0,400;0,500;0,600;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --font-display: "Playfair Display", serif;
+  
+  --color-luxury-bg: #f5f5f7;
+  --color-luxury-card: #ffffff;
+  --color-luxury-border: rgba(0, 0, 0, 0.08);
+  --color-luxury-border-hover: rgba(0, 0, 0, 0.16);
+  
+  --color-sage-50: #fafafb;
+  --color-sage-100: #f4f5f6;
+  --color-sage-200: #e4e7e9;
+  --color-sage-300: #cbd1d6;
+  --color-sage-400: #9ca6af;
+  --color-sage-500: #6b7782;
+  --color-sage-600: #4b5563;
+  --color-sage-700: #374151;
+  --color-sage-800: #1f2937;
+  --color-sage-900: #111827;
+  --color-sage-950: #030712;
+  
+  --color-gold-accent: #c4a265;
+  --color-grass-accent: #2e4a3f;
+  --color-grass-accent-light: #446e5b;
+}
+
+/* Custom premium scrollbar styling for light theme */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f5f5f7;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+  background-color: #f5f5f7;
+  color: #111827;
+}
+
+/* Text Selection */
+::selection {
+  background: rgba(196, 162, 101, 0.18);
+  color: #111827;
+}
+
+/* Smooth blur animations and light ambient orbs */
+.premium-blur-orb {
+  filter: blur(140px);
+  will-change: transform;
+}
+
+/* Glassmorphism utility optimized for light themes */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.glass-panel-hover {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.glass-panel-hover:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.08);
+}
