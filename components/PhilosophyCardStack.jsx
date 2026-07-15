@@ -14,13 +14,22 @@ import {
 import { gsap } from 'gsap';
 import styles from './PhilosophyCardStack.module.css';
 
-// Adapted from react-bits' CardSwap. Two real changes from the original:
+// Adapted from react-bits' CardSwap. Real changes from the original:
 // 1) Next.js can't import a plain global .css from a component, so the
 //    stylesheet is a CSS module and class names come from `styles.*`.
-// 2) The original auto-advances on a `setInterval`. Here advancement is
-//    driven entirely from outside via `advance()` (exposed through a ref),
-//    called by Philosophy.jsx's GSAP ScrollTrigger as the visitor scrolls
-//    through the pinned section - "reveal on scroll", not on a timer.
+// 2) The original auto-advances on a `setInterval`. Here the swap is driven
+//    entirely from outside via `setProgress()` (exposed through a ref),
+//    called by Philosophy.jsx's GSAP ScrollTrigger on every scroll tick.
+// 3) The swap is a continuously scroll-scrubbed transform, not a canned
+//    animation fired once a scroll threshold is crossed. An earlier version
+//    exposed discrete `advance()`/`retreat()` methods that each played a
+//    fixed-duration (~0.85s) timeline once triggered - visually fine, but
+//    the shift itself ran on its own clock rather than tracking the
+//    scrollbar, so it didn't feel "continuous." `setProgress(p)` (p ranges
+//    from 0 to `total - 1`, fractional) instead scrubs a paused GSAP
+//    timeline's `.progress()` directly from `p`'s fractional part, so every
+//    scroll pixel maps 1:1 to a point in the transition - scroll fast, it
+//    shifts fast; stop scrolling, it stops exactly where it is.
 export const StackCard = forwardRef(({ customClass, ...rest }, ref) => (
   <div ref={ref} {...rest} className={`${styles.card} ${customClass ?? ''} ${rest.className ?? ''}`.trim()} />
 ));
@@ -46,6 +55,12 @@ const placeNow = (el, slot, skew) =>
     force3D: true,
   });
 
+// Which card sits in which slot after `step` completed swaps, with no
+// mutable rotation state to track - purely a function of `step`, so scroll
+// position alone always determines the arrangement (self-correcting in
+// both directions, can't drift).
+const orderAtStep = (step, total) => Array.from({ length: total }, (_, i) => (step + i) % total);
+
 const PhilosophyCardStack = forwardRef(function PhilosophyCardStack(
   {
     width = 380,
@@ -70,90 +85,84 @@ const PhilosophyCardStack = forwardRef(function PhilosophyCardStack(
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [childArr.length]
   );
-  const order = useRef(Array.from({ length: childArr.length }, (_, i) => i));
+  const total = refs.length;
   const tlRef = useRef(null);
+  const baseStepRef = useRef(-1);
   const container = useRef(null);
 
-  useEffect(() => {
-    const total = refs.length;
-    refs.forEach((r, i) => {
-      if (r.current) placeNow(r.current, makeSlot(i, cardDistance, verticalDistance, total), reduce ? 0 : skewAmount);
+  const placeStatic = (step) => {
+    const order = orderAtStep(step, total);
+    order.forEach((cardIdx, slotIdx) => {
+      const el = refs[cardIdx]?.current;
+      if (el) placeNow(el, makeSlot(slotIdx, cardDistance, verticalDistance, total), reduce ? 0 : skewAmount);
     });
-    order.current = Array.from({ length: total }, (_, i) => i);
+  };
+
+  useEffect(() => {
+    tlRef.current?.kill();
+    baseStepRef.current = -1;
+    placeStatic(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardDistance, verticalDistance, skewAmount, reduce, refs.length]);
+  }, [cardDistance, verticalDistance, skewAmount, reduce, total]);
+
+  // Builds (paused) the transition timeline for the segment starting at
+  // `step` - front card (order[0]) drops, the rest promote one slot, the
+  // front card returns to the back. Identical motion to the old advance(),
+  // just never auto-played - `setProgress` scrubs it with `.progress()`.
+  const buildTimeline = (step) => {
+    const order = orderAtStep(step, total);
+    const [front, ...rest] = order;
+    const elFront = refs[front]?.current;
+    const tl = gsap.timeline({ paused: true });
+    if (!elFront) return tl;
+
+    tl.to(elFront, { y: '+=420', duration: config.durDrop, ease: config.ease });
+    tl.addLabel('promote', `-=${config.durDrop * config.promoteOverlap}`);
+    rest.forEach((idx, i) => {
+      const el = refs[idx]?.current;
+      if (!el) return;
+      const slot = makeSlot(i, cardDistance, verticalDistance, total);
+      tl.set(el, { zIndex: slot.zIndex }, 'promote');
+      tl.to(el, { x: slot.x, y: slot.y, z: slot.z, duration: config.durMove, ease: config.ease }, `promote+=${i * 0.15}`);
+    });
+    const backSlot = makeSlot(total - 1, cardDistance, verticalDistance, total);
+    tl.addLabel('return', `promote+=${config.durMove * config.returnDelay}`);
+    tl.set(elFront, { zIndex: backSlot.zIndex }, 'return');
+    tl.to(elFront, { x: backSlot.x, y: backSlot.y, z: backSlot.z, duration: config.durReturn, ease: config.ease }, 'return');
+    return tl;
+  };
 
   useImperativeHandle(
     ref,
     () => ({
-      advance() {
-        if (reduce || order.current.length < 2) return;
-        // Kill whatever's mid-flight first. Without this, a fast flick-scroll
-        // that fires advance() twice in the same tick leaves two timelines
-        // fighting over the same x/y/z - that fight is what reads as "janky."
-        tlRef.current?.kill();
-        const [front, ...rest] = order.current;
-        const elFront = refs[front].current;
-        if (!elFront) return;
-        const tl = gsap.timeline();
-        tlRef.current = tl;
-        tl.to(elFront, { y: '+=420', duration: config.durDrop, ease: config.ease });
-        tl.addLabel('promote', `-=${config.durDrop * config.promoteOverlap}`);
-        rest.forEach((idx, i) => {
-          const el = refs[idx].current;
-          if (!el) return;
-          const slot = makeSlot(i, cardDistance, verticalDistance, refs.length);
-          tl.set(el, { zIndex: slot.zIndex }, 'promote');
-          tl.to(el, { x: slot.x, y: slot.y, z: slot.z, duration: config.durMove, ease: config.ease }, `promote+=${i * 0.15}`);
-        });
-        const backSlot = makeSlot(refs.length - 1, cardDistance, verticalDistance, refs.length);
-        tl.addLabel('return', `promote+=${config.durMove * config.returnDelay}`);
-        tl.call(() => gsap.set(elFront, { zIndex: backSlot.zIndex }), undefined, 'return');
-        tl.to(elFront, { x: backSlot.x, y: backSlot.y, z: backSlot.z, duration: config.durReturn, ease: config.ease }, 'return');
-        tl.call(() => {
-          order.current = [...rest, front];
-        });
-      },
-      retreat() {
-        // Exact mirror of advance() - pulls the back card up to front while
-        // everything else steps back a slot. This is what lets scrolling
-        // back UP through the section undo a swap instead of ignoring it
-        // (which is what was happening before: only onEnter/forward was
-        // wired, so scrolling up did nothing and a stray forward re-trigger
-        // on the way back down is what produced the out-of-order card flashes).
-        if (reduce || order.current.length < 2) return;
-        tlRef.current?.kill();
-        const total = refs.length;
-        const last = order.current[order.current.length - 1];
-        const rest = order.current.slice(0, -1);
-        const elLast = refs[last].current;
-        if (!elLast) return;
-        const tl = gsap.timeline();
-        tlRef.current = tl;
-        tl.set(elLast, { zIndex: total + 1 });
-        tl.to(elLast, { x: 0, y: 0, z: 0, duration: config.durMove, ease: config.ease }, 0);
-        rest.forEach((idx, i) => {
-          const el = refs[idx].current;
-          if (!el) return;
-          const slot = makeSlot(i + 1, cardDistance, verticalDistance, total);
-          tl.set(el, { zIndex: slot.zIndex }, 0);
-          tl.to(el, { x: slot.x, y: slot.y, z: slot.z, duration: config.durMove, ease: config.ease }, 0);
-        });
-        tl.call(() => {
-          order.current = [last, ...rest];
-        });
+      setProgress(overallProgress) {
+        if (reduce || total < 2) return;
+        const steps = total - 1;
+        const clamped = Math.max(0, Math.min(steps, overallProgress));
+        const baseStep = Math.min(steps - 1, Math.floor(clamped));
+        const frac = clamped - baseStep;
+
+        if (baseStepRef.current !== baseStep) {
+          // New segment - snap to its exact starting arrangement first, so
+          // the fresh timeline's tweens capture the right "from" values,
+          // then build and scrub it. Works scrolling either direction since
+          // both `placeStatic` and `buildTimeline` are pure functions of
+          // `baseStep`, not of whatever the previous segment left behind.
+          tlRef.current?.kill();
+          placeStatic(baseStep);
+          tlRef.current = buildTimeline(baseStep);
+          baseStepRef.current = baseStep;
+        }
+        tlRef.current?.progress(frac);
       },
       reset() {
         tlRef.current?.kill();
-        const total = refs.length;
-        order.current = Array.from({ length: total }, (_, i) => i);
-        refs.forEach((r, i) => {
-          if (r.current) placeNow(r.current, makeSlot(i, cardDistance, verticalDistance, total), reduce ? 0 : skewAmount);
-        });
+        baseStepRef.current = -1;
+        placeStatic(0);
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cardDistance, verticalDistance, skewAmount, reduce]
+    [cardDistance, verticalDistance, skewAmount, reduce, total]
   );
 
   const rendered = childArr.map((child, i) =>

@@ -7,6 +7,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Hammer, Gauge, Coins } from '@phosphor-icons/react';
 import PhilosophyCardStack, { StackCard } from './PhilosophyCardStack';
+import PhilosophyDotGrid from './PhilosophyDotGrid';
 
 // The physics/WebGL badge is heavy (react-three-fiber + rapier's WASM
 // module touches `window`/`document` on import) - it must never run during
@@ -94,8 +95,15 @@ export default function Philosophy() {
   // scrollTop, exactly like any other sticky element. `trackRef` (this
   // section's scroll track) holds the sticky visual plus a trailing spacer
   // sized to `totalDistance`; GSAP now does only one job here - reading
-  // scroll progress through that track via `onUpdate` and calling
-  // `advance()`/`retreat()` - it no longer touches layout/position at all.
+  // scroll progress through that track via `onUpdate`.
+  //
+  // The card shift itself is continuously scroll-scrubbed, not triggered.
+  // `overallProgress` is a fractional value (0 to `steps`) derived directly
+  // from scroll position every single tick; `setProgress` on the stack maps
+  // that straight onto a paused GSAP timeline's `.progress()`, so the swap's
+  // motion is scrubbed 1:1 with the scrollbar rather than playing out on a
+  // fixed timer once some threshold is crossed - scroll a pixel, the cards
+  // move a pixel's worth; stop scrolling, they stop exactly there.
   useEffect(() => {
     if (reduce || !isDesktop || !trackRef.current) return undefined;
 
@@ -104,23 +112,15 @@ export default function Philosophy() {
       const el = trackRef.current;
       const steps = PILLARS.length - 1;
       const totalDistance = steps * STEP_PX;
-      const stepRef = { current: 0 };
 
       ScrollTrigger.create({
         trigger: el,
         start: 'top top',
         end: `+=${totalDistance}`,
         onUpdate: (self) => {
-          const target = Math.round(self.progress * steps);
-          while (stepRef.current < target) {
-            stackRef.current?.advance();
-            stepRef.current += 1;
-          }
-          while (stepRef.current > target) {
-            stackRef.current?.retreat();
-            stepRef.current -= 1;
-          }
-          setActiveIndex(target);
+          const overallProgress = self.progress * steps;
+          stackRef.current?.setProgress(overallProgress);
+          setActiveIndex(Math.round(overallProgress));
         },
       });
     }, trackRef);
@@ -130,23 +130,17 @@ export default function Philosophy() {
 
   return (
     <section id="philosophy" className="relative bg-white border-t border-luxury-border scroll-mt-24">
-      {/* `overflow-hidden` used to live on the section itself, to clip these
-          orbs - but `position: sticky` breaks under ANY ancestor with
-          non-visible overflow, even one that isn't the actual scroll
-          container. Scoped the clip to just this absolutely-positioned
-          wrapper instead, so the sticky scene below is a clean sibling with
-          no clipping ancestor between it and the page. */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-[15%] left-[-10%] w-[420px] h-[420px] rounded-full bg-gold-accent/5 premium-blur-orb"
-          animate={reduce ? {} : { x: [0, 26, -10, 0], y: [0, -18, 12, 0] }}
-          transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-        />
-        <motion.div
-          className="absolute bottom-[5%] right-[-8%] w-[460px] h-[460px] rounded-full bg-grass-accent/5 premium-blur-orb"
-          animate={reduce ? {} : { x: [0, -22, 14, 0], y: [0, 16, -10, 0] }}
-          transition={{ duration: 19, repeat: Infinity, ease: 'easeInOut' }}
-        />
+      {/* Interactive dot-grid backdrop, replacing the earlier flat blur
+          orbs - see PhilosophyDotGrid.jsx. Deliberately NOT wrapped in
+          `overflow-hidden` (the orbs needed that to clip themselves; the
+          dot grid is already sized exactly to this wrapper via its own
+          canvas, nothing to clip) and deliberately NOT `pointer-events-none`
+          - it needs real pointer events on itself to drive the hover glow,
+          scoped to this wrapper rather than `window` so it only reacts
+          within the section. Sits behind the actual content (`z-10` below),
+          which stacks above it via normal DOM order + relative z-index. */}
+      <div className="absolute inset-0">
+        <PhilosophyDotGrid className="absolute inset-0" reduce={!!reduce} />
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 relative z-10 py-24 md:py-28">
@@ -177,8 +171,21 @@ export default function Philosophy() {
             just native. */}
         <div ref={trackRef} className="mt-14 md:mt-16 relative">
           <div className="lg:sticky lg:top-0 grid grid-cols-1 lg:grid-cols-2 items-center gap-10 lg:gap-6 lg:min-h-[640px]">
-            <div className="order-2 lg:order-1 h-[320px] sm:h-[380px] lg:h-[560px]">
-              <LanyardBadge activeIndex={activeIndex} />
+            {/* Outer div is just a layout placeholder - it keeps the grid
+                column's width/height reservation intact. The inner div is
+                what actually holds the Canvas: below `lg` it's a normal
+                full-width/full-height block (same as before), but at `lg`
+                and up it switches to `absolute`, breaks out to a full 100vw
+                width centered on this column, and sits above the card stack
+                (`z-20`). The R3F canvas is sized to its container, so a drag
+                that swings the card past the narrow grid column's edge was
+                hitting the canvas's own hard boundary and disappearing -
+                widening the canvas itself (not just visual overflow) is
+                what actually gives the drag room. */}
+            <div className="relative order-2 lg:order-1 h-[320px] sm:h-[380px] lg:h-[560px]">
+              <div className="h-full w-full lg:absolute lg:inset-y-0 lg:left-1/2 lg:w-screen lg:-translate-x-1/2 lg:z-20">
+                <LanyardBadge activeIndex={activeIndex} />
+              </div>
             </div>
 
             <div className="order-1 lg:order-2 flex items-center justify-center">
