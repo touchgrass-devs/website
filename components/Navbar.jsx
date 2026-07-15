@@ -10,13 +10,14 @@ import {
 } from 'framer-motion';
 import { List, X, Terminal, ArrowUpRight } from '@phosphor-icons/react';
 
-// Only links to sections that actually exist yet - Consultation from the
-// blueprint's nav still isn't built, so it stays out until it is. Philosophy
-// is back in now that its section exists.
+// Only links to sections that actually exist yet. Philosophy and Contact
+// are both in now that their sections exist (Contact replaces the
+// blueprint's "Consultation" nav item, which was never built as such).
 const MENU_ITEMS = [
   { name: 'Services', href: '#services' },
   { name: 'Expertise', href: '#expertise' },
   { name: 'Philosophy', href: '#philosophy' },
+  { name: 'Contact', href: '#contact' },
 ];
 
 // Magnetic pull: cursor position offsets the button via spring-smoothed
