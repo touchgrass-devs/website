@@ -1,6 +1,7 @@
 'use client';
 
-import { motion } from 'framer-motion';
+import { useRef } from 'react';
+import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
 import HeroDotGrid from './HeroDotGrid';
 
 const containerVariants = {
@@ -25,10 +26,33 @@ const childVariants = {
   },
 };
 
+// Each headline line reveals with a mask/wipe (translate inside an
+// overflow-hidden strip) rather than a plain fade, for a more cinematic entrance.
+const lineVariants = {
+  hidden: { y: '110%' },
+  visible: {
+    y: '0%',
+    transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] },
+  },
+};
+
 export default function Hero() {
+  const sectionRef = useRef(null);
+  const reduce = useReducedMotion();
+
+  // Background drifts slightly slower than the scroll itself while the hero
+  // is in view - a subtle parallax that adds depth into the handoff to
+  // Services. Range collapses to 0 under prefers-reduced-motion.
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ['start start', 'end start'],
+  });
+  const dotGridY = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [0, -60]);
+
   return (
     <section
       id="hero"
+      ref={sectionRef}
       className="relative min-h-screen flex items-center justify-center pt-28 pb-16 px-4 sm:px-6 md:px-12 bg-luxury-bg overflow-hidden"
     >
       {/* Light subtle warm gradients */}
@@ -37,13 +61,15 @@ export default function Hero() {
 
       {/* Hero outer frame */}
       <div className="w-full max-w-7xl mx-auto rounded-[32px] bg-white border border-luxury-border shadow-sm relative overflow-hidden flex flex-col justify-between p-6 sm:p-10 md:p-16 min-h-[85vh]">
-        {/* Interactive dot field, sampled from the reference image — hover to see it react */}
-        <div className="absolute inset-0 z-0">
+        {/* Interactive dot field, sampled from the reference image — hover to see it react.
+            Wrapped in a motion.div so it can carry the scroll-parallax offset; any gap the
+            shift reveals matches this frame's own white background, so it's invisible. */}
+        <motion.div className="absolute inset-0 z-0" style={{ y: dotGridY }}>
           <HeroDotGrid
             src="/hero/creation-hands.jpeg"
             className="w-full h-full block"
           />
-        </div>
+        </motion.div>
 
         {/* Empty spacing for top symmetry matching header */}
         <div className="hidden sm:block h-6" />
@@ -55,13 +81,18 @@ export default function Hero() {
           animate="visible"
           className="relative z-10 flex flex-col items-center justify-center text-center my-auto max-w-3xl mx-auto px-2 pointer-events-none"
         >
-          <motion.h1
-            variants={childVariants}
-            className="text-4xl sm:text-5xl md:text-7xl font-sans tracking-tight text-sage-900 leading-[1.1]"
-          >
-            <span className="font-light text-sage-500 block mb-2">Clean Engineering,</span>
-            <span className="font-bold italic block text-sage-950 pb-1">Modern Design</span>
-          </motion.h1>
+          <h1 className="text-4xl sm:text-5xl md:text-7xl font-sans tracking-tight text-sage-900 leading-[1.1]">
+            <span className="block overflow-hidden">
+              <motion.span variants={lineVariants} className="font-light text-sage-500 block mb-2">
+                Clean Engineering,
+              </motion.span>
+            </span>
+            <span className="block overflow-hidden">
+              <motion.span variants={lineVariants} className="font-bold italic block text-sage-950 pb-1">
+                Modern Design
+              </motion.span>
+            </span>
+          </h1>
 
           <motion.p
             variants={childVariants}
@@ -72,12 +103,14 @@ export default function Hero() {
           </motion.p>
 
           <motion.div variants={childVariants} className="mt-8 pointer-events-auto">
-            <a
+            <motion.a
               href="#contact"
-              className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-sage-950 hover:bg-grass-accent text-white font-sans text-xs font-bold uppercase tracking-wider shadow-lg hover:shadow-xl transition-all duration-300"
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.12 }}
+              className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-sage-950 hover:bg-grass-accent text-white font-sans text-xs font-bold uppercase tracking-wider shadow-lg hover:shadow-xl transition-colors duration-300"
             >
               Start a Project
-            </a>
+            </motion.a>
           </motion.div>
         </motion.div>
 
@@ -100,7 +133,9 @@ export default function Hero() {
               className="hover:text-grass-accent transition-colors flex items-center gap-1 uppercase tracking-wider cursor-pointer"
             >
               Scroll to Explore
-              <svg
+              <motion.svg
+                animate={reduce ? {} : { y: [0, 4, 0] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
                 className="w-3 h-3 text-gold-accent"
                 viewBox="0 0 24 24"
                 fill="none"
@@ -111,7 +146,7 @@ export default function Hero() {
               >
                 <path d="M12 5v14" />
                 <path d="M19 12l-7 7-7-7" />
-              </svg>
+              </motion.svg>
             </button>
           </div>
         </div>

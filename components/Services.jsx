@@ -6,9 +6,15 @@ import {
   AnimatePresence,
   useMotionValue,
   useMotionValueEvent,
+  useReducedMotion,
   animate,
 } from 'framer-motion';
 import { Compass, Cpu, Sparkle, ShieldCheck, CaretRight, CaretLeft } from '@phosphor-icons/react';
+import Threads from './Threads';
+
+// Same accent RGB as the carousel's own hover glow / HeroDotGrid, normalized to
+// 0-1 for the shader - keeps the background tied to the page's one accent color.
+const THREADS_COLOR = [63 / 255, 174 / 255, 106 / 255];
 
 const SERVICES = [
   {
@@ -143,6 +149,7 @@ export default function Services() {
   const [mousePos, setMousePos] = useState({});
   const spinSteps = useMotionValue(0);
   const dragRef = useRef(null);
+  const reduce = useReducedMotion();
 
   useMotionValueEvent(spinSteps, 'change', (v) => setLiveOffset(v));
 
@@ -212,11 +219,29 @@ export default function Services() {
   return (
     <section
       id="services"
-      className="relative py-24 md:py-32 bg-white border-t border-luxury-border overflow-hidden"
+      className="relative py-24 md:py-32 bg-white border-t border-luxury-border overflow-hidden scroll-mt-24"
     >
+      {/* Ambient WebGL background - sits behind the title/intro text only, fades
+          out before the carousel so it doesn't compete with the cards. */}
+      <div
+        className="absolute inset-x-0 top-0 h-[10px] md:h-[360px] z-0 opacity-70 pointer-events-none"
+        style={{
+          WebkitMaskImage: 'linear-gradient(to bottom, black, transparent)',
+          maskImage: 'linear-gradient(to bottom, black, transparent)',
+        }}
+      >
+        <Threads color={THREADS_COLOR} amplitude={0.4} distance={0.15} />
+      </div>
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 relative z-10">
         {/* Section header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16 md:mb-20">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-100px' }}
+          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16 md:mb-20"
+        >
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-4">
               <span className="w-1.5 h-1.5 rounded-full bg-gold-accent" />
@@ -235,7 +260,7 @@ export default function Services() {
             From marketing sites to internal tools to AI workflows, we design, build, and
             support every layer so nothing falls through the cracks.
           </p>
-        </div>
+        </motion.div>
 
         {/* Coverflow */}
         <div
@@ -282,6 +307,18 @@ export default function Services() {
                 }`}
                 style={{ transformStyle: 'preserve-3d' }}
               >
+                {/* Idle ambient bob for unfocused cards - a nested transform on a
+                    separate element so it composes cleanly with the hover lift above
+                    instead of fighting it for the same animate prop. */}
+                <motion.div
+                  className="relative w-full h-full"
+                  animate={!isActive && !reduce ? { y: [0, -10, 0] } : { y: 0 }}
+                  transition={
+                    !isActive && !reduce
+                      ? { duration: 2.6 + (i % 3) * 0.4, repeat: Infinity, ease: 'easeInOut' }
+                      : { duration: 0.2 }
+                  }
+                >
                 {/* subtle dot-grid texture, echoes the hero's halftone motif */}
                 <div
                   className="absolute inset-0"
@@ -314,10 +351,17 @@ export default function Services() {
                     {isActive ? (
                       <motion.div
                         key="expanded"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        initial="hidden"
+                        animate="visible"
                         exit={{ opacity: 0, y: -6, transition: { duration: 0.1 } }}
-                        transition={{ duration: 0.16, ease: 'easeOut' }}
+                        variants={{
+                          hidden: { opacity: 0, y: 6 },
+                          visible: {
+                            opacity: 1,
+                            y: 0,
+                            transition: { duration: 0.16, ease: 'easeOut', staggerChildren: 0.05, delayChildren: 0.08 },
+                          },
+                        }}
                         className="flex flex-col items-center w-full h-full"
                       >
                         <Icon size={38} weight="duotone" className="text-sage-950 shrink-0" />
@@ -326,7 +370,17 @@ export default function Services() {
 
                         <div className="mt-5 flex flex-col gap-4 w-full overflow-y-auto">
                           {svc.subServices.map((sub) => (
-                            <div key={sub.title} className="flex items-start gap-2">
+                            <motion.div
+                              key={sub.title}
+                              variants={{
+                                // x, not y: this list sits in an overflow-y-auto container, and a
+                                // vertical transform briefly counts toward its scrollable overflow,
+                                // flashing a scrollbar mid-stagger. A horizontal offset doesn't.
+                                hidden: { opacity: 0, x: -8 },
+                                visible: { opacity: 1, x: 0, transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] } },
+                              }}
+                              className="flex items-start gap-2"
+                            >
                               <CaretRight
                                 size={11}
                                 weight="bold"
@@ -340,7 +394,7 @@ export default function Services() {
                                   {sub.detail}
                                 </div>
                               </div>
-                            </div>
+                            </motion.div>
                           ))}
                         </div>
                       </motion.div>
@@ -365,6 +419,7 @@ export default function Services() {
                     )}
                   </AnimatePresence>
                 </div>
+                </motion.div>
               </motion.div>
             );
           })}
@@ -372,25 +427,35 @@ export default function Services() {
 
         {/* Navigation: liquid-glass arrow bubbles, no dashes / video-style controls */}
         <div className="mt-10 flex items-center justify-center gap-5">
-          <button
+          <motion.button
             type="button"
             aria-label="Previous service"
             onClick={() => selectIndex(active - 1)}
-            className="relative w-12 h-12 rounded-full flex items-center justify-center text-sage-700 bg-white/40 backdrop-blur-xl border border-white/70 shadow-[0_8px_24px_rgba(30,41,37,0.10),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-150 ease-out hover:bg-white/60 hover:text-grass-accent hover:-translate-y-0.5 active:scale-95"
+            whileInView={reduce ? {} : { scale: [1, 1.07, 1] }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.5, delay: 0.3, repeat: 1, repeatDelay: 0.35, ease: 'easeInOut' }}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            className="relative w-12 h-12 rounded-full flex items-center justify-center text-sage-700 bg-white/40 backdrop-blur-xl border border-white/70 shadow-[0_8px_24px_rgba(30,41,37,0.10),inset_0_1px_0_rgba(255,255,255,0.9)] transition-colors duration-150 ease-out hover:bg-white/60 hover:text-grass-accent"
           >
             <span className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-br from-white/50 to-transparent" />
             <CaretLeft size={18} weight="bold" className="relative" />
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
             type="button"
             aria-label="Next service"
             onClick={() => selectIndex(active + 1)}
-            className="relative w-12 h-12 rounded-full flex items-center justify-center text-sage-700 bg-white/40 backdrop-blur-xl border border-white/70 shadow-[0_8px_24px_rgba(30,41,37,0.10),inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-150 ease-out hover:bg-white/60 hover:text-grass-accent hover:-translate-y-0.5 active:scale-95"
+            whileInView={reduce ? {} : { scale: [1, 1.07, 1] }}
+            viewport={{ once: true, margin: '-40px' }}
+            transition={{ duration: 0.5, delay: 0.45, repeat: 1, repeatDelay: 0.35, ease: 'easeInOut' }}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            className="relative w-12 h-12 rounded-full flex items-center justify-center text-sage-700 bg-white/40 backdrop-blur-xl border border-white/70 shadow-[0_8px_24px_rgba(30,41,37,0.10),inset_0_1px_0_rgba(255,255,255,0.9)] transition-colors duration-150 ease-out hover:bg-white/60 hover:text-grass-accent"
           >
             <span className="pointer-events-none absolute inset-0 rounded-full bg-gradient-to-br from-white/50 to-transparent" />
             <CaretRight size={18} weight="bold" className="relative" />
-          </button>
+          </motion.button>
         </div>
 
         {/* Caption */}
@@ -412,15 +477,6 @@ export default function Services() {
               </p>
             </motion.div>
           </AnimatePresence>
-        </div>
-
-        <div className="mt-10 flex justify-center">
-          <a
-            href="#contact"
-            className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-sage-950 hover:bg-grass-accent text-white font-sans text-xs font-bold uppercase tracking-wider shadow-lg hover:shadow-xl transition-all duration-150 ease-out"
-          >
-            Start a Project
-          </a>
         </div>
       </div>
     </section>

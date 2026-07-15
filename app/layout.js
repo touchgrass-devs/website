@@ -1,4 +1,6 @@
 import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
+import Navbar from '@/components/Navbar';
+import SmoothScroll from '@/components/SmoothScroll';
 import './globals.css';
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -24,7 +26,12 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={`${plusJakartaSans.variable} ${jetBrainsMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <SmoothScroll>
+          <Navbar />
+          {children}
+        </SmoothScroll>
+      </body>
     </html>
   )
 }
