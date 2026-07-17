@@ -47,7 +47,7 @@ export default function PhilosophyDotGrid({
   className = '',
   reduce = false,
   dotSize = 2.6,
-  gap = 34,
+  gap = 29,
   proximity = 130,
   speedTrigger = 130,
   shockRadius = 190,
@@ -55,10 +55,22 @@ export default function PhilosophyDotGrid({
   maxSpeed = 4000,
   resistance = 700,
   returnDuration = 1.3,
+  // Experimental per explicit request ("test how it would look if we add
+  // lines connecting the dot grid") - a "constellation" mesh between each
+  // dot and its immediate right/bottom grid neighbor. Defaults on so it's
+  // live to review; flip to `false` (or delete the line-drawing pass below)
+  // to revert to plain dots with zero other changes needed.
+  showLines = true,
+  lineBaseAlpha = 0.05,
+  lineGlowStrength = 0.5,
 }) {
   const wrapperRef = useRef(null);
   const canvasRef = useRef(null);
   const dotsRef = useRef([]);
+  const colsRef = useRef(0);
+  const rowsRef = useRef(0);
+  const pitchRef = useRef(0);
+  const startYRef = useRef(0);
   const pointerRef = useRef({ x: -9999, y: -9999, active: false, lastTime: 0, lastX: 0, lastY: 0 });
 
   const circlePath = useMemo(() => {
@@ -99,10 +111,15 @@ export default function PhilosophyDotGrid({
           xOffset: 0,
           yOffset: 0,
           _inertiaApplied: false,
+          _t: 0,
         });
       }
     }
     dotsRef.current = dots;
+    colsRef.current = cols;
+    rowsRef.current = rows;
+    pitchRef.current = cell;
+    startYRef.current = startY;
   }, [dotSize, gap]);
 
   // Resize handling - rebuild the grid whenever the section's box changes.
@@ -115,10 +132,23 @@ export default function PhilosophyDotGrid({
     return () => ro.disconnect();
   }, [buildGrid]);
 
-  // Render loop - always running (this is a permanent ambient layer, not
-  // something that should look frozen when the pointer is idle), but paused
-  // while the tab is backgrounded, matching the `Threads` background's own
-  // `document.hidden` courtesy check elsewhere on this page.
+  // Render loop - paused (RAF fully stopped, not just skipped) whenever no
+  // part of the section is on screen, via IntersectionObserver on the
+  // wrapper, same courtesy pattern `Threads.jsx` already uses - plus
+  // `document.hidden` for backgrounded tabs. This matters a lot more here
+  // than it does for `Threads`: this canvas spans the whole pinned-dial
+  // section, which is `h-[340vh]`+ tall once the scroll track is in normal
+  // flow, so without this gate the loop was running forever regardless of
+  // scroll position, not just while Philosophy was actually in view.
+  //
+  // Even while in view, only ~1 viewport's worth of that multi-thousand-dot
+  // canvas is ever visible at once (the rest is scrolled off above/below).
+  // `draw()` now computes the visible row band each frame (via the
+  // wrapper's `getBoundingClientRect()` and the cached row pitch/start-Y
+  // from `buildGrid`) and only touches dots/lines inside that band - the
+  // same visual result (nothing changes for what's actually on screen),
+  // but the expensive per-shape canvas calls (shadow, fill, stroke) no
+  // longer run for the thousands of dots currently scrolled out of view.
   useEffect(() => {
     if (!circlePath) return undefined;
 
@@ -139,8 +169,13 @@ export default function PhilosophyDotGrid({
       return undefined;
     }
 
-    let rafId;
+    const wrap = wrapperRef.current;
+    if (!wrap) return undefined;
+
+    let rafId = null;
+    let isVisible = false;
     const proxSq = proximity * proximity;
+    const CULL_BUFFER = 150; // px of slack above/below the viewport band
 
     const draw = () => {
       if (document.hidden) {
@@ -152,40 +187,136 @@ export default function PhilosophyDotGrid({
       if (!ctx) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const { x: px, y: py, active } = pointerRef.current;
+      const dots = dotsRef.current;
+      const cols = colsRef.current;
+      const rows = rowsRef.current;
+      const cell = pitchRef.current;
+      const startY = startYRef.current;
 
-      for (const dot of dotsRef.current) {
+      // Visible row band, in local (wrapper) coordinates -> row indices.
+      const rectTop = wrap.getBoundingClientRect().top;
+      let rowStart = 0;
+      let rowEnd = rows - 1;
+      if (cell > 0) {
+        rowStart = Math.max(0, Math.floor((-rectTop - CULL_BUFFER - startY) / cell));
+        rowEnd = Math.min(rows - 1, Math.ceil((window.innerHeight - rectTop + CULL_BUFFER - startY) / cell) + 1);
+      }
+
+      const drawLineTo = (dot, neighbor) => {
+        if (!neighbor) return;
         const ox = dot.cx + dot.xOffset;
         const oy = dot.cy + dot.yOffset;
-        let alpha = 0.4;
-        let r = BASE_RGB.r;
-        let g = BASE_RGB.g;
-        let b = BASE_RGB.b;
+        const nx = neighbor.cx + neighbor.xOffset;
+        const ny = neighbor.cy + neighbor.yOffset;
+        const avgT = (dot._t + neighbor._t) / 2;
+        const alpha = lineBaseAlpha + avgT * lineGlowStrength;
+        const r = BASE_RGB.r + (ACCENT_RGB.r - BASE_RGB.r) * avgT;
+        const g = BASE_RGB.g + (ACCENT_RGB.g - BASE_RGB.g) * avgT;
+        const b = BASE_RGB.b + (ACCENT_RGB.b - BASE_RGB.b) * avgT;
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.lineTo(nx, ny);
+        ctx.strokeStyle = `rgba(${r | 0}, ${g | 0}, ${b | 0}, ${Math.min(1, alpha)})`;
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+      };
 
-        if (active) {
-          const dx = dot.cx - px;
-          const dy = dot.cy - py;
-          const dsq = dx * dx + dy * dy;
-          if (dsq <= proxSq) {
-            const t = 1 - Math.sqrt(dsq) / proximity;
-            r = BASE_RGB.r + (ACCENT_RGB.r - BASE_RGB.r) * t;
-            g = BASE_RGB.g + (ACCENT_RGB.g - BASE_RGB.g) * t;
-            b = BASE_RGB.b + (ACCENT_RGB.b - BASE_RGB.b) * t;
-            alpha = 0.4 + t * 0.55;
+      // Pass 1: update + draw every dot in the visible band. Kept as its
+      // own full pass over the band (not interleaved with line-drawing
+      // below) so that by the time pass 2 draws a line to a right/bottom
+      // neighbor, that neighbor's `_t` has already been recomputed THIS
+      // frame - interleaving the two would have line color reading one
+      // frame stale off whichever neighbor hadn't been visited yet, same
+      // ordering the original full-canvas version relied on.
+      for (let row = rowStart; row <= rowEnd; row++) {
+        const rowOffset = row * cols;
+        for (let col = 0; col < cols; col++) {
+          const dot = dots[rowOffset + col];
+          if (!dot) continue;
+          const ox = dot.cx + dot.xOffset;
+          const oy = dot.cy + dot.yOffset;
+          let alpha = 0.4;
+          let r = BASE_RGB.r;
+          let g = BASE_RGB.g;
+          let b = BASE_RGB.b;
+          let t = 0;
+
+          if (active) {
+            const dx = dot.cx - px;
+            const dy = dot.cy - py;
+            const dsq = dx * dx + dy * dy;
+            if (dsq <= proxSq) {
+              t = 1 - Math.sqrt(dsq) / proximity;
+              r = BASE_RGB.r + (ACCENT_RGB.r - BASE_RGB.r) * t;
+              g = BASE_RGB.g + (ACCENT_RGB.g - BASE_RGB.g) * t;
+              b = BASE_RGB.b + (ACCENT_RGB.b - BASE_RGB.b) * t;
+              // Bumped from +0.55 to +0.7 - a bit more glow on close dots,
+              // per request. Real soft-glow (shadowBlur), not just alpha, so
+              // it actually reads as "glowing" rather than just "more opaque".
+              alpha = 0.4 + t * 0.7;
+            }
+          }
+          dot._t = t;
+
+          ctx.save();
+          ctx.translate(ox, oy);
+          if (t > 0.05) {
+            ctx.shadowColor = `rgba(${ACCENT_RGB.r}, ${ACCENT_RGB.g}, ${ACCENT_RGB.b}, ${Math.min(1, t)})`;
+            ctx.shadowBlur = t * 6;
+          }
+          ctx.fillStyle = `rgba(${r | 0}, ${g | 0}, ${b | 0}, ${Math.min(1, alpha)})`;
+          ctx.fill(circlePath);
+          ctx.restore();
+        }
+      }
+
+      // Pass 2: constellation mesh, same visible band - every `_t` it reads
+      // was just set above, this frame, for both endpoints of every line.
+      if (showLines) {
+        for (let row = rowStart; row <= rowEnd; row++) {
+          const rowOffset = row * cols;
+          for (let col = 0; col < cols; col++) {
+            const dot = dots[rowOffset + col];
+            if (!dot) continue;
+            if (col < cols - 1) drawLineTo(dot, dots[rowOffset + col + 1]);
+            if (row < rowEnd) drawLineTo(dot, dots[rowOffset + cols + col]);
           }
         }
-
-        ctx.save();
-        ctx.translate(ox, oy);
-        ctx.fillStyle = `rgba(${r | 0}, ${g | 0}, ${b | 0}, ${alpha})`;
-        ctx.fill(circlePath);
-        ctx.restore();
       }
+
       rafId = requestAnimationFrame(draw);
     };
 
-    draw();
-    return () => cancelAnimationFrame(rafId);
-  }, [circlePath, proximity, reduce]);
+    const startLoop = () => {
+      if (rafId == null) rafId = requestAnimationFrame(draw);
+    };
+    const stopLoop = () => {
+      if (rafId != null) cancelAnimationFrame(rafId);
+      rafId = null;
+    };
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        isVisible = entries[0].isIntersecting;
+        if (isVisible && !document.hidden) startLoop();
+        else stopLoop();
+      },
+      { threshold: 0 }
+    );
+    io.observe(wrap);
+
+    const onVisibilityChange = () => {
+      if (document.hidden) stopLoop();
+      else if (isVisible) startLoop();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      stopLoop();
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [circlePath, proximity, reduce, showLines, lineBaseAlpha, lineGlowStrength]);
 
   // Pointer interaction - scoped to this component's own wrapper, not
   // `window`, so hovering/clicking elsewhere on the page never touches it.

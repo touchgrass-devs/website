@@ -17,9 +17,7 @@
   background: rgba(0, 0, 0, 0.25);
 }
 
-/* Smooth scrolling */
 html {
-  scroll-behavior: smooth;
   background-color: #f5f5f7;
   color: #111827;
 }
@@ -30,10 +28,21 @@ html {
   color: #111827;
 }
 
-/* Smooth blur animations and light ambient orbs */
+/* Ambient background blobs (Hero/Expertise/Contact corner glows). Used to be
+   `filter: blur(140px)` on a solid circle - blur is one of the costliest
+   CSS paint operations, and being static didn't make it free: anything else
+   repainting in the same stacking context (headline reveals, the dot-grid
+   canvas, whileInView cards) could force these to re-rasterize too. A
+   radial mask gives the same soft, borderless falloff as a compositing
+   operation instead of a blur convolution - same look, near-zero cost.
+   No `will-change` here either now - it existed only to force these onto
+   their own GPU layer to cache the old blur's output; per this project's
+   own `design-taste-frontend` rule ("use will-change sparingly, only on
+   elements that actually animate"), it shouldn't have been on static
+   shapes regardless. */
 .premium-blur-orb {
-  filter: blur(140px);
-  will-change: transform;
+  -webkit-mask-image: radial-gradient(circle, black 0%, black 15%, transparent 100%);
+  mask-image: radial-gradient(circle, black 0%, black 15%, transparent 100%);
 }
 
 /* Glassmorphism utility optimized for light themes */

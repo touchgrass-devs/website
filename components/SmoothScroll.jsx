@@ -44,9 +44,16 @@ export default function SmoothScroll({ children }) {
     gsap.ticker.add(raf);
     gsap.ticker.lagSmoothing(0);
 
+    // Exposed so components can trigger a smooth programmatic scroll (e.g.
+    // Philosophy's dial - clicking an unfocused node scrolls to it) without
+    // fighting Lenis's own eased scroll physics. Native `window.scrollTo`
+    // would otherwise race Lenis's rAF loop and produce a jittery jump.
+    window.__lenis = lenis;
+
     return () => {
       gsap.ticker.remove(raf);
       lenis.destroy();
+      delete window.__lenis;
     };
   }, []);
 

@@ -36,13 +36,49 @@ const lineVariants = {
   },
 };
 
+// Layering (bottom to top):
+//   1. The white card — a normal, margined/rounded box (matches the reference
+//      framing), given NO z-index utility of its own. That's deliberate: an
+//      element only traps its descendants' z-index inside it if it sets an
+//      explicit z-index itself. Leaving it at the browser default (auto)
+//      means its own background paints in the default stack position, but
+//      anything inside it that DOES set a z-index (the content block below)
+//      still competes directly against this section's other children.
+//   2. The dotted asset — a direct child of <section> (not nested in the
+//      card), sized with absolute inset-0 against this full-width, un-padded
+//      section so it reaches the true window edges. Explicit z-10, so it
+//      paints above the card's plain white background — the dots show ON
+//      TOP of the white, across the whole hero, not hidden under it.
+//   3. The hero content — nested inside the card (for layout/alignment), but
+//      z-20 lets it break out above the dots despite that nesting. Carries
+//      pointer-events-none so hover reaches the dots underneath everywhere
+//      text isn't; only the CTA link and scroll button re-enable
+//      pointer-events-auto.
 export default function Hero() {
   const sectionRef = useRef(null);
   const reduce = useReducedMotion();
 
+  // Routes in-page navigation through Lenis (`window.__lenis`) instead of
+  // native/CSS smooth scroll - see Navbar.jsx's `scrollToHash` for the full
+  // rationale (globals.css's old page-wide `scroll-behavior: smooth` used
+  // to double up with Lenis's own scroll loop). `offset: -96` mirrors the
+  // `scroll-mt-24` every section (including Contact) already carries, so
+  // links still land below the fixed nav exactly as before.
+  const scrollToHash = (hash) => (e) => {
+    const id = hash.replace('#', '');
+    const target = document.getElementById(id);
+    if (!target) return;
+    e.preventDefault();
+    if (typeof window !== 'undefined' && window.__lenis) {
+      window.__lenis.scrollTo(target, { offset: -96, duration: reduce ? 0 : 1.1 });
+    } else {
+      target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    }
+  };
+
   // Background drifts slightly slower than the scroll itself while the hero
-  // is in view - a subtle parallax that adds depth into the handoff to
-  // Services. Range collapses to 0 under prefers-reduced-motion.
+  // is in view — a subtle parallax that adds depth into the handoff to the
+  // next section. Range collapses to 0 under prefers-reduced-motion.
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ['start start', 'end start'],
@@ -53,33 +89,31 @@ export default function Hero() {
     <section
       id="hero"
       ref={sectionRef}
-      className="relative min-h-screen flex items-center justify-center pt-28 pb-16 px-4 sm:px-6 md:px-12 bg-luxury-bg overflow-hidden"
+      className="relative min-h-screen flex items-center justify-center pt-32 pb-24 px-6 sm:px-10 md:px-16 overflow-hidden"
     >
       {/* Light subtle warm gradients */}
       <div className="absolute top-0 left-1/4 w-[50%] h-[50%] rounded-full bg-gold-accent/5 premium-blur-orb pointer-events-none" />
       <div className="absolute bottom-10 right-1/4 w-[40%] h-[40%] rounded-full bg-grass-accent/5 premium-blur-orb pointer-events-none" />
 
-      {/* Hero outer frame */}
-      <div className="w-full max-w-7xl mx-auto rounded-[32px] bg-white border border-luxury-border shadow-sm relative overflow-hidden flex flex-col justify-between p-6 sm:p-10 md:p-16 min-h-[85vh]">
-        {/* Interactive dot field, sampled from the reference image — hover to see it react.
-            Wrapped in a motion.div so it can carry the scroll-parallax offset; any gap the
-            shift reveals matches this frame's own white background, so it's invisible. */}
-        <motion.div className="absolute inset-0 z-0" style={{ y: dotGridY }}>
-          <HeroDotGrid
-            src="/hero/creation-hands.jpeg"
-            className="w-full h-full block"
-          />
-        </motion.div>
+      {/* Dotted asset: sized to the section itself (window edge to window
+          edge), not the card below, and explicitly above the card's white
+          background (z-10 vs. the card's auto). */}
+      <motion.div className="absolute inset-0 z-10" style={{ y: dotGridY }}>
+        <HeroDotGrid src="/hero/creation-hands.jpeg" className="w-full h-full block" />
+      </motion.div>
 
+      {/* Hero card: plain white, margined, rounded — matches the reference
+          framing. No z-index here on purpose (see note above). */}
+      <div className="relative w-full max-w-7xl mx-auto rounded-[32px] bg-white border border-luxury-border shadow-sm flex flex-col justify-between p-6 sm:p-10 md:p-16 min-h-[70vh]">
         {/* Empty spacing for top symmetry matching header */}
         <div className="hidden sm:block h-6" />
 
-        {/* Main central content area */}
+        {/* Main central content area — z-20 breaks it out above the dots. */}
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="relative z-10 flex flex-col items-center justify-center text-center my-auto max-w-3xl mx-auto px-2 pointer-events-none"
+          className="relative z-20 flex flex-col items-center justify-center text-center my-auto max-w-3xl mx-auto px-2 pointer-events-none"
         >
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-sans tracking-tight text-sage-900 leading-[1.1]">
             <span className="block overflow-hidden">
@@ -105,6 +139,7 @@ export default function Hero() {
           <motion.div variants={childVariants} className="mt-8 pointer-events-auto">
             <motion.a
               href="#contact"
+              onClick={scrollToHash('#contact')}
               whileTap={{ scale: 0.96 }}
               transition={{ duration: 0.12 }}
               className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-sage-950 hover:bg-grass-accent text-white font-sans text-xs font-bold uppercase tracking-wider shadow-lg hover:shadow-xl transition-colors duration-300"
@@ -114,8 +149,8 @@ export default function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* Footnote row */}
-        <div className="relative z-10 border-t border-luxury-border/60 pt-6 mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] font-mono text-sage-500 select-none pointer-events-none">
+        {/* Footnote row — same z-20 breakout as the content block above. */}
+        <div className="relative z-20 border-t border-luxury-border/60 pt-6 mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] font-mono text-sage-500 select-none pointer-events-none">
           <div className="w-full sm:w-1/3 text-center sm:text-left">
             Touch grass. Then build something great.
           </div>
@@ -127,9 +162,7 @@ export default function Hero() {
           <div className="w-full sm:w-1/3 text-center sm:text-right flex items-center justify-center sm:justify-end gap-1.5 pointer-events-auto">
             <button
               type="button"
-              onClick={() => {
-                document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' });
-              }}
+              onClick={scrollToHash('#services')}
               className="hover:text-grass-accent transition-colors flex items-center gap-1 uppercase tracking-wider cursor-pointer"
             >
               Scroll to Explore

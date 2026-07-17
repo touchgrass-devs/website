@@ -6,6 +6,7 @@ import {
   AnimatePresence,
   LayoutGroup,
   useMotionValue,
+  useReducedMotion,
   useSpring,
 } from 'framer-motion';
 import { List, X, Terminal, ArrowUpRight } from '@phosphor-icons/react';
@@ -22,7 +23,7 @@ const MENU_ITEMS = [
 
 // Magnetic pull: cursor position offsets the button via spring-smoothed
 // motion values, never useState, per the magnetic-micro-physics rule.
-function MagneticCTA({ href, className, children }) {
+function MagneticCTA({ href, onNavigate, className, children }) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const springX = useSpring(x, { stiffness: 200, damping: 18, mass: 0.4 });
@@ -42,6 +43,7 @@ function MagneticCTA({ href, className, children }) {
   return (
     <motion.a
       href={href}
+      onClick={onNavigate}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       whileTap={{ scale: 0.96 }}
@@ -59,6 +61,31 @@ export default function Navbar() {
   const [hidden, setHidden] = useState(false);
   const [activeSection, setActiveSection] = useState('');
   const lastY = useRef(0);
+  const reduce = useReducedMotion();
+
+  // In-page nav now routes through Lenis (`window.__lenis`, set by
+  // `SmoothScroll.jsx`) instead of relying on the page-wide CSS
+  // `scroll-behavior: smooth` default that used to live in globals.css -
+  // that CSS rule and Lenis's own scroll-driven rAF loop were both trying
+  // to own "smooth scrolling" at once, which could fight each other on an
+  // anchor click. Lenis is now the single source of smooth scroll site-wide;
+  // this is what makes that true for nav links specifically, not just wheel/
+  // touch input. `offset: -96` mirrors every section's own `scroll-mt-24`
+  // (96px) so links still land below the fixed nav exactly as before.
+  // Falls back to native `scrollIntoView` (still smooth via its own
+  // `behavior` option, independent of the CSS rule that's now gone) if
+  // Lenis isn't mounted yet, or is skipped entirely under reduced motion.
+  const scrollToHash = (hash) => (e) => {
+    const id = hash.replace('#', '');
+    const target = document.getElementById(id);
+    if (!target) return;
+    e.preventDefault();
+    if (typeof window !== 'undefined' && window.__lenis) {
+      window.__lenis.scrollTo(target, { offset: -96, duration: reduce ? 0 : 1.1 });
+    } else {
+      target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    }
+  };
 
   // Background swap + direction-aware hide/reveal. Nav only hides once it's
   // past its own height, and never while the mobile drawer is open.
@@ -118,7 +145,7 @@ export default function Navbar() {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 flex items-center justify-between">
         {/* Brand mark */}
-        <a href="#hero" className="flex items-center gap-2.5 group">
+        <a href="#hero" onClick={scrollToHash('#hero')} className="flex items-center gap-2.5 group">
           <span className="relative w-8 h-8 rounded-lg bg-sage-950 flex items-center justify-center group-hover:bg-grass-accent transition-colors duration-300">
             <Terminal size={16} weight="bold" className="text-white" />
           </span>
@@ -137,6 +164,7 @@ export default function Navbar() {
                   <a
                     key={item.name}
                     href={item.href}
+                    onClick={scrollToHash(item.href)}
                     className={`relative py-1.5 text-xs font-semibold tracking-[0.15em] uppercase transition-colors duration-300 ${
                       isActive
                         ? 'text-sage-950'
@@ -158,6 +186,7 @@ export default function Navbar() {
 
             <MagneticCTA
               href="#contact"
+              onNavigate={scrollToHash('#contact')}
               className="inline-flex items-center gap-1.5 rounded-full bg-sage-950 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-colors duration-300 hover:bg-grass-accent hover:shadow-lg"
             >
               Start a Project
@@ -196,7 +225,10 @@ export default function Navbar() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: idx * 0.05, duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                   href={item.href}
-                  onClick={() => setIsOpen(false)}
+                  onClick={(e) => {
+                    scrollToHash(item.href)(e);
+                    setIsOpen(false);
+                  }}
                   className="py-3 text-xs font-bold tracking-[0.2em] text-sage-600 uppercase border-b border-luxury-border/60 last:border-0 transition-colors duration-300 hover:text-sage-950"
                 >
                   {item.name}
@@ -208,7 +240,10 @@ export default function Navbar() {
                 transition={{ delay: MENU_ITEMS.length * 0.05, duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 whileTap={{ scale: 0.96 }}
                 href="#contact"
-                onClick={() => setIsOpen(false)}
+                onClick={(e) => {
+                  scrollToHash('#contact')(e);
+                  setIsOpen(false);
+                }}
                 className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-full bg-sage-950 py-3.5 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-colors duration-300"
               >
                 Start a Project
