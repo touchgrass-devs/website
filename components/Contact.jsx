@@ -16,10 +16,27 @@ const PROJECT_TYPES = ['Website', 'Web App', 'AI & Automation', 'Ongoing Support
 
 const CONTACT_EMAIL = 'team@touchgrassdevs.foo';
 
+// text-sage-400 measured ~2.5:1 against white and placeholder-sage-500
+// measured ~4.2:1 against bg-sage-50 - both under WCAG AA's 4.5:1 body-text
+// floor (impeccable's mandatory contrast check). Bumped one step darker on
+// the existing sage ramp - no new colors, same tokens as the rest of the
+// page, just the correct step.
 const fieldLabel =
-  'text-[10px] font-mono tracking-widest text-sage-400 uppercase font-bold';
-const fieldInput =
-  'w-full px-4 py-3 rounded-xl bg-sage-50 border border-luxury-border text-sm text-sage-900 placeholder-sage-500 focus:outline-none focus:border-grass-accent focus:ring-1 focus:ring-grass-accent transition-colors duration-300';
+  'text-[10px] font-mono tracking-widest text-sage-500 uppercase font-bold';
+
+// A function, not a static string: the error variant needs to fully replace
+// the border/focus-ring utilities rather than have a second class appended
+// after them, since Tailwind's generated stylesheet order (not className
+// string order) decides which utility wins when two touch the same
+// property. Red here is a semantic validation color, not a second brand
+// accent - reused from Tailwind's own default scale, not a new token.
+const fieldInputClass = (hasError) =>
+  `w-full px-4 py-3 rounded-xl bg-sage-50 border text-sm text-sage-900 placeholder-sage-600 focus:outline-none focus:ring-1 transition-colors duration-300 ${
+    hasError
+      ? 'border-red-400 focus:border-red-400 focus:ring-red-400'
+      : 'border-luxury-border focus:border-grass-accent focus:ring-grass-accent'
+  }`;
+const fieldError = 'mt-1.5 text-[11px] text-red-600';
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -30,6 +47,11 @@ export default function Contact() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  // Only surface validation errors after a submit attempt, not while the
+  // visitor is still filling the form in - errors appear the moment they're
+  // relevant and clear themselves the moment a field becomes valid again,
+  // without ever flashing red on a form nobody has tried to submit yet.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -42,13 +64,29 @@ export default function Contact() {
     }));
   };
 
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  const errors = {
+    name: submitAttempted && !formData.name.trim() ? 'Enter your name.' : null,
+    email: submitAttempted
+      ? !formData.email.trim()
+        ? 'Enter your email.'
+        : !isValidEmail(formData.email)
+          ? 'Enter a valid email address.'
+          : null
+      : null,
+    message: submitAttempted && !formData.message.trim() ? 'Tell us a bit about the project.' : null,
+  };
+
   // No backend is wired up yet (project decision: ship the UI first, connect
   // a real email/API endpoint later). This only simulates a submit locally -
   // do not treat the success state below as proof anything was actually
   // sent anywhere until a real endpoint replaces this timeout.
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.email || !formData.message) return;
+    setSubmitAttempted(true);
+    if (!formData.name.trim() || !isValidEmail(formData.email) || !formData.message.trim()) {
+      return;
+    }
 
     setSubmitting(true);
     setTimeout(() => {
@@ -59,6 +97,7 @@ export default function Contact() {
 
   const resetForm = () => {
     setFormData({ name: '', email: '', projectType: '', message: '' });
+    setSubmitAttempted(false);
     setSubmitted(false);
   };
 
@@ -81,12 +120,12 @@ export default function Contact() {
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="max-w-2xl"
         >
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-sans font-bold tracking-tight text-sage-950 leading-[1.15] pb-1">
+          <h2 className="text-balance text-3xl sm:text-4xl md:text-5xl font-sans font-bold tracking-tight text-sage-950 leading-[1.15] pb-1">
             Tell us what
             <br />
             you&rsquo;re <span className="italic font-light text-sage-500">building.</span>
           </h2>
-          <p className="mt-5 text-sm sm:text-base text-sage-600 font-light leading-relaxed max-w-md">
+          <p className="text-pretty mt-5 text-sm sm:text-base text-sage-600 font-light leading-relaxed max-w-md">
             Four developers, one inbox. You&rsquo;ll hear back directly from
             whoever&rsquo;s the right fit, not an account manager.
           </p>
@@ -110,14 +149,16 @@ export default function Contact() {
             </span>
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="group inline-flex items-center gap-2.5 text-base sm:text-lg font-mono text-sage-800 hover:text-grass-accent transition-colors duration-300"
+              className="group inline-flex items-center gap-2.5 text-base sm:text-lg font-mono text-sage-800 hover:text-grass-accent focus-visible:text-grass-accent focus-visible:outline-none transition-colors duration-300"
             >
               <EnvelopeSimple size={18} weight="bold" className="shrink-0 text-gold-accent" />
-              <span className="border-b border-transparent group-hover:border-grass-accent transition-colors duration-300">
+              <span className="border-b border-transparent group-hover:border-grass-accent group-focus-visible:border-grass-accent transition-colors duration-300">
                 {CONTACT_EMAIL}
               </span>
             </a>
-            <p className="text-xs text-sage-500 leading-relaxed font-light max-w-[26ch]">
+            {/* sage-500 measured ~4.2:1 against bg-luxury-bg here, just under
+                the 4.5:1 body-text floor - bumped to sage-600 (~6.9:1). */}
+            <p className="text-pretty text-xs text-sage-600 leading-relaxed font-light max-w-[26ch]">
               We read every message ourselves. Usually a reply within a
               couple of business days.
             </p>
@@ -133,7 +174,17 @@ export default function Contact() {
             transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             className="lg:col-span-8"
           >
-            <div className="bg-white rounded-[28px] border border-luxury-border shadow-sm p-8 md:p-10 relative overflow-hidden">
+            {/* `layout` here smooths the card's own height change when the
+                (taller) form swaps for the (shorter) success state - without
+                it the height snaps instantly, which reads as a jump/CLS
+                even though each child's own opacity/scale transition is
+                smooth. aria-live announces the swap for screen readers. */}
+            <motion.div
+              layout
+              transition={{ layout: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }}
+              aria-live="polite"
+              className="bg-white rounded-[28px] border border-luxury-border shadow-sm p-8 md:p-10 relative overflow-hidden"
+            >
               <AnimatePresence mode="wait">
                 {!submitted ? (
                   <motion.form
@@ -158,8 +209,15 @@ export default function Contact() {
                           value={formData.name}
                           onChange={handleChange}
                           placeholder="Your name"
-                          className={fieldInput}
+                          aria-invalid={Boolean(errors.name)}
+                          aria-describedby={errors.name ? 'contact-name-error' : undefined}
+                          className={fieldInputClass(Boolean(errors.name))}
                         />
+                        {errors.name && (
+                          <p id="contact-name-error" role="alert" className={fieldError}>
+                            {errors.name}
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="contact-email" className={fieldLabel}>
@@ -173,13 +231,20 @@ export default function Contact() {
                           value={formData.email}
                           onChange={handleChange}
                           placeholder="you@company.com"
-                          className={fieldInput}
+                          aria-invalid={Boolean(errors.email)}
+                          aria-describedby={errors.email ? 'contact-email-error' : undefined}
+                          className={fieldInputClass(Boolean(errors.email))}
                         />
+                        {errors.email && (
+                          <p id="contact-email-error" role="alert" className={fieldError}>
+                            {errors.email}
+                          </p>
+                        )}
                       </div>
                     </div>
 
                     <div className="space-y-3">
-                      <span className={fieldLabel}>Project type (optional)</span>
+                      <span className={fieldLabel}>Project Type (optional)</span>
                       <div className="flex flex-wrap gap-2">
                         {PROJECT_TYPES.map((type) => {
                           const isSelected = formData.projectType === type;
@@ -189,7 +254,7 @@ export default function Contact() {
                               key={type}
                               onClick={() => handleTypeSelect(type)}
                               aria-pressed={isSelected}
-                              className={`px-4 py-2 rounded-xl text-xs font-sans tracking-wide transition-colors duration-300 border cursor-pointer ${
+                              className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-sans tracking-wide transition-colors duration-300 border cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-grass-accent focus-visible:ring-offset-2 ${
                                 isSelected
                                   ? 'bg-sage-950 text-white border-sage-950 font-semibold'
                                   : 'bg-sage-50 border-luxury-border text-sage-600 hover:text-sage-950 hover:border-sage-400'
@@ -214,14 +279,21 @@ export default function Contact() {
                         value={formData.message}
                         onChange={handleChange}
                         placeholder="What are you trying to build, and what timeline are you working with?"
-                        className={`${fieldInput} resize-none`}
+                        aria-invalid={Boolean(errors.message)}
+                        aria-describedby={errors.message ? 'contact-message-error' : undefined}
+                        className={`${fieldInputClass(Boolean(errors.message))} resize-none`}
                       />
+                      {errors.message && (
+                        <p id="contact-message-error" role="alert" className={fieldError}>
+                          {errors.message}
+                        </p>
+                      )}
                     </div>
 
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="w-full py-4 rounded-xl bg-sage-950 hover:bg-grass-accent text-white font-sans font-bold tracking-wider text-xs uppercase shadow-md transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full py-4 rounded-xl bg-sage-950 hover:bg-grass-accent text-white font-sans font-bold tracking-wider text-xs uppercase shadow-md transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-grass-accent focus-visible:ring-offset-2"
                     >
                       {submitting ? (
                         <>
@@ -251,17 +323,17 @@ export default function Contact() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <h3 className="text-2xl font-sans font-bold text-sage-950 tracking-tight">
+                      <h3 className="text-balance text-2xl font-sans font-bold text-sage-950 tracking-tight">
                         Thanks for reaching out.
                       </h3>
-                      <p className="text-sm text-sage-600 font-light max-w-sm mx-auto leading-relaxed">
+                      <p className="text-pretty text-sm text-sage-600 font-light max-w-sm mx-auto leading-relaxed">
                         Your message is in. We&rsquo;ll get back to you within
                         a couple of business days.
                       </p>
                     </div>
                     <button
                       onClick={resetForm}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-luxury-border text-[10px] font-mono uppercase text-sage-600 hover:text-sage-950 hover:border-grass-accent transition-colors duration-300 cursor-pointer"
+                      className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-luxury-border text-[10px] font-mono uppercase text-sage-600 hover:text-sage-950 hover:border-grass-accent transition-colors duration-300 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-grass-accent focus-visible:ring-offset-2"
                     >
                       <ArrowCounterClockwise size={13} weight="bold" />
                       Send another message
@@ -269,7 +341,7 @@ export default function Contact() {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </motion.div>
           </motion.div>
         </div>
       </div>
