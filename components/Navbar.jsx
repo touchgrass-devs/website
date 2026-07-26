@@ -1,15 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import {
-  motion,
-  AnimatePresence,
-  LayoutGroup,
-  useMotionValue,
-  useReducedMotion,
-  useSpring,
-} from 'framer-motion';
-import { List, X, Terminal, ArrowUpRight } from '@phosphor-icons/react';
+import { motion, AnimatePresence, LayoutGroup, useReducedMotion } from 'framer-motion';
+import { List, X, Terminal } from '@phosphor-icons/react';
 
 // Only links to sections that actually exist yet. Philosophy and Contact
 // are both in now that their sections exist (Contact replaces the
@@ -20,40 +13,6 @@ const MENU_ITEMS = [
   { name: 'Philosophy', href: '#philosophy' },
   { name: 'Contact', href: '#contact' },
 ];
-
-// Magnetic pull: cursor position offsets the button via spring-smoothed
-// motion values, never useState, per the magnetic-micro-physics rule.
-function MagneticCTA({ href, onNavigate, className, children }) {
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const springX = useSpring(x, { stiffness: 200, damping: 18, mass: 0.4 });
-  const springY = useSpring(y, { stiffness: 200, damping: 18, mass: 0.4 });
-
-  const handleMouseMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    x.set((e.clientX - (rect.left + rect.width / 2)) * 0.3);
-    y.set((e.clientY - (rect.top + rect.height / 2)) * 0.45);
-  };
-
-  const handleMouseLeave = () => {
-    x.set(0);
-    y.set(0);
-  };
-
-  return (
-    <motion.a
-      href={href}
-      onClick={onNavigate}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      whileTap={{ scale: 0.96 }}
-      style={{ x: springX, y: springY }}
-      className={className}
-    >
-      {children}
-    </motion.a>
-  );
-}
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -154,9 +113,14 @@ export default function Navbar() {
           </span>
         </a>
 
-        {/* Desktop nav */}
+        {/* Desktop nav — links only. The "Start a Project" CTA that used to
+            sit here is gone (removed per request): it duplicated the Hero's
+            own CTA intent, and design-taste-frontend's NO DUPLICATE CTA
+            INTENT rule flags exactly that (two "contact" buttons visible at
+            once). The Hero's CTA is the one and only "Start a Project" on
+            the page now. */}
         <LayoutGroup id="navbar">
-          <nav className="hidden md:flex items-center gap-9">
+          <nav className="hidden md:flex items-center">
             <div className="flex items-center gap-8">
               {MENU_ITEMS.map((item) => {
                 const isActive = activeSection === item.href.slice(1);
@@ -183,15 +147,6 @@ export default function Navbar() {
                 );
               })}
             </div>
-
-            <MagneticCTA
-              href="#contact"
-              onNavigate={scrollToHash('#contact')}
-              className="inline-flex items-center gap-1.5 rounded-full bg-sage-950 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-colors duration-300 hover:bg-grass-accent hover:shadow-lg"
-            >
-              Start a Project
-              <ArrowUpRight size={14} weight="bold" />
-            </MagneticCTA>
           </nav>
         </LayoutGroup>
 
@@ -234,21 +189,6 @@ export default function Navbar() {
                   {item.name}
                 </motion.a>
               ))}
-              <motion.a
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: MENU_ITEMS.length * 0.05, duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                whileTap={{ scale: 0.96 }}
-                href="#contact"
-                onClick={(e) => {
-                  scrollToHash('#contact')(e);
-                  setIsOpen(false);
-                }}
-                className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-full bg-sage-950 py-3.5 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-colors duration-300"
-              >
-                Start a Project
-                <ArrowUpRight size={14} weight="bold" />
-              </motion.a>
             </div>
           </motion.div>
         )}

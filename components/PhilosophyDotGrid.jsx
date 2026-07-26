@@ -71,7 +71,18 @@ export default function PhilosophyDotGrid({
   const rowsRef = useRef(0);
   const pitchRef = useRef(0);
   const startYRef = useRef(0);
-  const pointerRef = useRef({ x: -9999, y: -9999, active: false, lastTime: 0, lastX: 0, lastY: 0 });
+  const pointerRef = useRef({ x: -9999, y: -9999, active: false, lastTime: 0, lastX: 0, lastY: 0, dirty: false });
+  // Dots currently mid GSAP-inertia push/return - the render loop below keeps
+  // itself alive while this is non-empty, and drains it once every member has
+  // settled back near its resting offset. See the "Render loop" effect for why.
+  const perturbedDotsRef = useRef(new Set());
+  // Lets the resize/build effect (declared separately, runs first) and the
+  // pointer-handling effect (declared after the render loop) both wake the
+  // loop without restructuring this into one giant effect. Populated with the
+  // real start/stop functions once the render-loop effect mounts; a no-op
+  // before that (harmless - the loop's own IntersectionObserver handles the
+  // very first paint once the section is actually on screen).
+  const loopControlRef = useRef({ start: () => {}, stop: () => {} });
 
   const circlePath = useMemo(() => {
     if (typeof window === 'undefined' || !window.Path2D) return null;
@@ -123,11 +134,20 @@ export default function PhilosophyDotGrid({
   }, [dotSize, gap]);
 
   // Resize handling - rebuild the grid whenever the section's box changes.
+  // Also marks the pointer state "dirty" and wakes the render loop (below)
+  // so the new layout actually gets painted - the loop no longer redraws on
+  // its own every frame at rest, see that effect's comment.
   useEffect(() => {
     buildGrid();
+    pointerRef.current.dirty = true;
+    loopControlRef.current.start();
     const wrap = wrapperRef.current;
     if (!wrap) return undefined;
-    const ro = new ResizeObserver(buildGrid);
+    const ro = new ResizeObserver(() => {
+      buildGrid();
+      pointerRef.current.dirty = true;
+      loopControlRef.current.start();
+    });
     ro.observe(wrap);
     return () => ro.disconnect();
   }, [buildGrid]);
@@ -149,6 +169,22 @@ export default function PhilosophyDotGrid({
   // same visual result (nothing changes for what's actually on screen),
   // but the expensive per-shape canvas calls (shadow, fill, stroke) no
   // longer run for the thousands of dots currently scrolled out of view.
+  //
+  // On top of both of the above: the loop is now demand-driven rather than
+  // free-running. Unlike HeroDotGrid, this file's hover glow isn't eased
+  // over time - `t` is a direct function of the *current* pointer position,
+  // recomputed from scratch every call - so a stationary pointer (the
+  // overwhelmingly common case: someone scrolling through this section with
+  // the mouse just resting somewhere on screen) was repainting the exact
+  // same pixels 60 times a second for as long as any sliver of the section
+  // was in view. `draw()` now only reschedules itself when something can
+  // actually still change: a real pointer event landed this frame
+  // (`pointerRef.current.dirty`, set by the pointer-handling effect below on
+  // move/leave/click and consumed here) or a dot is still mid GSAP-inertia
+  // push/return (`perturbedDotsRef`). At rest, one frame paints the
+  // (unchanged) resting grid and the loop then fully stops - same pixels on
+  // screen, no cost. `loopControlRef` is how the other two effects (resize,
+  // pointer) wake this one back up on demand.
   useEffect(() => {
     if (!circlePath) return undefined;
 
@@ -171,6 +207,11 @@ export default function PhilosophyDotGrid({
 
     const wrap = wrapperRef.current;
     if (!wrap) return undefined;
+    // Captured once so the cleanup below closes over a stable reference
+    // rather than re-reading `loopControlRef.current` after the effect has
+    // already torn down (the ref object itself never changes identity, but
+    // capturing it satisfies the exhaustive-deps lint and is clearer either way).
+    const loopControl = loopControlRef.current;
 
     let rafId = null;
     let isVisible = false;
@@ -284,7 +325,27 @@ export default function PhilosophyDotGrid({
         }
       }
 
-      rafId = requestAnimationFrame(draw);
+      // Decide whether another frame is actually needed - see this effect's
+      // top comment. `wasDirty` covers "a pointer event just landed and
+      // hasn't been painted yet"; `anyPerturbed` covers "a dot is still
+      // animating back from an inertia push/shockwave". Neither true means
+      // this exact frame is what's staying on screen indefinitely, so stop.
+      let anyPerturbed = false;
+      perturbedDotsRef.current.forEach((d) => {
+        if (Math.abs(d.xOffset) > 0.02 || Math.abs(d.yOffset) > 0.02) {
+          anyPerturbed = true;
+        } else {
+          perturbedDotsRef.current.delete(d);
+        }
+      });
+      const wasDirty = pointerRef.current.dirty;
+      pointerRef.current.dirty = false;
+
+      if (wasDirty || anyPerturbed) {
+        rafId = requestAnimationFrame(draw);
+      } else {
+        rafId = null;
+      }
     };
 
     const startLoop = () => {
@@ -294,12 +355,19 @@ export default function PhilosophyDotGrid({
       if (rafId != null) cancelAnimationFrame(rafId);
       rafId = null;
     };
+    loopControl.start = startLoop;
+    loopControl.stop = stopLoop;
 
     const io = new IntersectionObserver(
       (entries) => {
         isVisible = entries[0].isIntersecting;
-        if (isVisible && !document.hidden) startLoop();
-        else stopLoop();
+        if (isVisible && !document.hidden) {
+          // Force one fresh paint the moment any part of the section enters
+          // view - covers first mount and scrolling back in after being
+          // fully off-screen (the loop may have gone fully idle while away).
+          pointerRef.current.dirty = true;
+          startLoop();
+        } else stopLoop();
       },
       { threshold: 0 }
     );
@@ -307,7 +375,10 @@ export default function PhilosophyDotGrid({
 
     const onVisibilityChange = () => {
       if (document.hidden) stopLoop();
-      else if (isVisible) startLoop();
+      else if (isVisible) {
+        pointerRef.current.dirty = true;
+        startLoop();
+      }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
@@ -315,6 +386,8 @@ export default function PhilosophyDotGrid({
       stopLoop();
       io.disconnect();
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      loopControl.start = () => {};
+      loopControl.stop = () => {};
     };
   }, [circlePath, proximity, reduce, showLines, lineBaseAlpha, lineGlowStrength]);
 
@@ -347,6 +420,7 @@ export default function PhilosophyDotGrid({
       pr.x = e.clientX - rect.left;
       pr.y = e.clientY - rect.top;
       pr.active = true;
+      pr.dirty = true;
 
       if (speed > speedTrigger) {
         for (const dot of dotsRef.current) {
@@ -354,6 +428,7 @@ export default function PhilosophyDotGrid({
           if (dist < proximity && !dot._inertiaApplied) {
             dot._inertiaApplied = true;
             gsap.killTweensOf(dot);
+            perturbedDotsRef.current.add(dot);
             const pushX = dot.cx - pr.x + vx * 0.005;
             const pushY = dot.cy - pr.y + vy * 0.005;
             gsap.to(dot, {
@@ -366,10 +441,13 @@ export default function PhilosophyDotGrid({
           }
         }
       }
+      loopControlRef.current.start();
     };
 
     const onLeave = () => {
       pointerRef.current.active = false;
+      pointerRef.current.dirty = true;
+      loopControlRef.current.start();
     };
 
     const onClick = (e) => {
@@ -381,6 +459,7 @@ export default function PhilosophyDotGrid({
         if (dist < shockRadius && !dot._inertiaApplied) {
           dot._inertiaApplied = true;
           gsap.killTweensOf(dot);
+          perturbedDotsRef.current.add(dot);
           const falloff = Math.max(0, 1 - dist / shockRadius);
           const pushX = (dot.cx - cx) * shockStrength * falloff;
           const pushY = (dot.cy - cy) * shockStrength * falloff;
@@ -393,6 +472,8 @@ export default function PhilosophyDotGrid({
           });
         }
       }
+      pointerRef.current.dirty = true;
+      loopControlRef.current.start();
     };
 
     const throttledMove = throttle(onMove, 40);

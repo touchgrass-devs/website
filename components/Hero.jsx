@@ -3,6 +3,7 @@
 import { useRef } from 'react';
 import { motion, useScroll, useTransform, useReducedMotion } from 'framer-motion';
 import HeroDotGrid from './HeroDotGrid';
+import LiquidMetalCTA from './LiquidMetalCTA';
 
 const containerVariants = {
   hidden: { opacity: 0, y: 30 },
@@ -132,16 +133,10 @@ export default function Hero() {
             </span>
           </h1>
 
-          <motion.div variants={childVariants} className="mt-8 pointer-events-auto">
-            <motion.a
-              href="#contact"
-              onClick={scrollToHash('#contact')}
-              whileTap={{ scale: 0.96 }}
-              transition={{ duration: 0.12 }}
-              className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-sage-950 hover:bg-grass-accent text-white font-sans text-xs font-bold uppercase tracking-wider shadow-lg hover:shadow-xl transition-colors duration-300"
-            >
+          <motion.div variants={childVariants} className="mt-10 pointer-events-auto">
+            <LiquidMetalCTA href="#contact" onClick={scrollToHash('#contact')} className="font-sans">
               Start a Project
-            </motion.a>
+            </LiquidMetalCTA>
           </motion.div>
         </motion.div>
 

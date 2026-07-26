@@ -171,9 +171,29 @@ export default function Philosophy() {
 
   return (
     <section id="philosophy" className="relative bg-white border-t border-luxury-border scroll-mt-24">
-      {/* Interactive dot-grid backdrop - unrelated to this round's redesign,
-          kept as-is. See PhilosophyDotGrid.jsx. */}
-      <div className="absolute inset-0">
+      {/* Interactive dot-grid backdrop. Was `absolute inset-0` against this
+          section, which - once the pinned track inflates the section to
+          several thousand px tall - meant the canvas was tied to a
+          DOCUMENT position, not the viewport: it visibly slid upward past
+          the sticky dial the entire time the dial was pinned, since nothing
+          about `absolute` keeps an element still while its tall ancestor
+          scrolls underneath it. Fixed with the standard "sticky background"
+          trick instead of a section-wide absolute layer: `sticky top-0
+          h-screen` pins this div to the viewport for as long as any part of
+          the (taller-than-one-viewport) section is being scrolled through,
+          and `-mb-[100vh]` cancels its own height out of the section's
+          normal-flow layout so it doesn't push the header/track/quote down
+          by an extra viewport's worth of space. Net effect: the grid enters
+          once at the top of the section and simply does not move again
+          until the section's bottom finally clears the viewport - it reads
+          as a fixed backdrop the whole time you're scrolling through
+          Philosophy, dial included, instead of a layer gliding by behind a
+          still dial. Still a sibling of the `pointer-events-none` content
+          wrapper below (not a descendant of it), so it keeps receiving
+          hover/click without needing its own `pointer-events-auto` override
+          - same reasoning already documented the first time this bug class
+          showed up in this file. */}
+      <div className="sticky top-0 h-screen -mb-[100vh] z-0">
         <PhilosophyDotGrid className="absolute inset-0" reduce={!!reduce} />
       </div>
 
@@ -224,9 +244,28 @@ export default function Philosophy() {
                     transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                     className="space-y-3"
                   >
-                    <span className="text-[11px] font-mono tracking-[0.25em] text-gold-accent uppercase font-bold block">
-                      {String(activeIndex + 1).padStart(2, '0')} // {active.tag}
-                    </span>
+                    {/* Redesigned per feedback that "01 // Craft" read as a
+                        generic AI-template eyebrow (mono font + slash
+                        separator). Replaced with a step indicator instead -
+                        four short bars, one per pillar, the active one
+                        elongated and gold - which does the same "which of 4
+                        am I on" job the number was doing, but ties visually
+                        to the dial's own 4 stops instead of a bare digit. */}
+                    <div className="flex flex-col items-center gap-2.5">
+                      <div className="flex items-center gap-1.5">
+                        {PILLARS.map((_, i) => (
+                          <span
+                            key={i}
+                            className={`h-[3px] rounded-full transition-all duration-500 ease-out ${
+                              i === activeIndex ? 'w-7 bg-gold-accent' : 'w-2 bg-sage-200'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-xs uppercase tracking-[0.2em] text-sage-500 font-semibold">
+                        {active.tag}
+                      </span>
+                    </div>
                     <h3 className="text-2xl md:text-3xl font-sans font-bold tracking-tight text-sage-950">{active.title}</h3>
                     <p className="text-sm md:text-base text-sage-600 font-light leading-relaxed max-w-xl mx-auto">{active.body}</p>
                   </motion.div>

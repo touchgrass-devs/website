@@ -60,8 +60,29 @@ export default function MacDock() {
   // Duplicate logos list for infinite scrolling marquee loop
   const duplicatedTechnologies = [...LOGOS, ...LOGOS];
 
+  // This track's scroll and each icon's own magnetism (`DockIcon` below) are
+  // both driven by `useAnimationFrame`, which ticks forever regardless of
+  // scroll position - Expertise sits mid-page, so without this the marquee
+  // (plus all 42 duplicated icons' per-frame distance/scale math) kept
+  // running in the background for the entire time the visitor was on the
+  // page, including scrolled away to Philosophy/Contact. `inViewRef` is read
+  // (not subscribed to) inside every one of those rAF callbacks so toggling
+  // it doesn't itself trigger a re-render - same "check a ref inside the
+  // frame callback" pattern already used for the section's `dockRef`.
+  const inViewRef = useRef(true);
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el) return undefined;
+    const io = new IntersectionObserver(([entry]) => { inViewRef.current = entry.isIntersecting; }, {
+      rootMargin: '300px 0px',
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   // Continuous marquee loop - runs constantly at a smooth speed (never stops on hover)
   useAnimationFrame((time, delta) => {
+    if (!inViewRef.current) return;
     let currentX = trackX.get();
     const dt = delta ? delta / 16.6 : 1;
     currentX -= scrollSpeed.current * dt;
@@ -132,6 +153,7 @@ export default function MacDock() {
                 baseSize={size}
                 distanceLimit={distanceLimit}
                 overlap={idx === 0 ? 0 : overlap}
+                inViewRef={inViewRef}
               />
             );
           })}
@@ -172,6 +194,7 @@ function DockIcon({
   baseSize,
   distanceLimit,
   overlap,
+  inViewRef,
 }) {
   const [isBouncing, setIsBouncing] = useState(false);
 
@@ -189,6 +212,7 @@ function DockIcon({
   const y = useSpring(yTarget, { stiffness: 150, damping: 25, mass: 0.2 });
 
   useAnimationFrame(() => {
+    if (inViewRef && !inViewRef.current) return;
     const val = mouseX.get();
     if (val === Infinity) {
       scaleTarget.set(1);
