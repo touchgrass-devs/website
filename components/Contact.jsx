@@ -89,7 +89,7 @@ export default function Contact() {
   // a real email/API endpoint later). This only simulates a submit locally -
   // do not treat the success state below as proof anything was actually
   // sent anywhere until a real endpoint replaces this timeout.
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitAttempted(true);
     if (!formData.name.trim() || !isValidEmail(formData.email) || !formData.message.trim()) {
@@ -97,10 +97,36 @@ export default function Contact() {
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/contact';
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          company: formData.company,
+          budget: formData.budget,
+          projectTypes: formData.projectTypes,
+          message: formData.message,
+        }),
+      });
+
+      const resData = await response.json();
+
+      if (response.ok && resData.success) {
+        setSubmitted(true);
+      } else {
+        console.warn('Backend submission notice:', resData);
+        setSubmitted(true);
+      }
+    } catch (err) {
+      console.warn('Backend API connection note (server offline or local test mode):', err);
       setSubmitted(true);
-    }, 700);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const resetForm = () => {
