@@ -30,21 +30,21 @@ const PILLARS = [
   {
     tag: 'Craft',
     icon: Hammer,
-    angle: -60,
+    angle: -90,
     title: 'Absolute Craftsmanship',
     body: 'No generic presets, no template shortcuts. Every curve, transition, and breakpoint is deliberate, built to hold up under real use, not just a first screenshot.',
   },
   {
     tag: 'Performance',
     icon: Gauge,
-    angle: -20,
+    angle: -30,
     title: 'Pragmatic Engineering',
     body: 'Exceptional design is wasted without speed. We build on lean foundations, engineered for 95+ Lighthouse scores and load times nobody has to wait through.',
   },
   {
     tag: 'Pricing',
     icon: Coins,
-    angle: 20,
+    angle: 30,
     title: 'Literal, Honest Pricing',
     body: 'No hidden agency markups, no buzzwords to inflate an invoice. Transparent, milestone-based pricing tied directly to what the work is actually worth to you.',
   },
@@ -55,7 +55,7 @@ const PILLARS = [
   {
     tag: 'Experience',
     icon: Eye,
-    angle: 60,
+    angle: 90,
     title: 'Deliberate User Experience',
     body: 'Every interaction earns its place. No dark patterns, no attention-farming loops, no clutter dressed up as features - just calm, legible products people actually want to come back to.',
   },
@@ -95,9 +95,9 @@ export default function Philosophy() {
     restDelta: 0.0001,
   });
 
-  // Dial sweeps an arc (60deg -> -60deg, bumped up from 45/-45 per request
+  // Dial sweeps an arc (90deg -> -90deg, bumped up from 45/-45 per request
   // for a more visible range of motion), not a full wheel - matches the
-  // four fixed node angles above (-60/-20/20/60, 40deg apart, widened to
+  // four fixed node angles above (-90/-30/30/90, 40deg apart, widened to
   // match).
   //
   // Still a 4-stop piecewise map, matching the active-index breakpoints
@@ -121,7 +121,7 @@ export default function Philosophy() {
   // it reads as the dial winding up and settling into place, or spinning a
   // touch past its target before finally coming to rest, rather than
   // freezing solid.
-  const dialRotation = useTransform(smoothProgress, [0, 0.3, 0.7, 1], [68, 60, -60, -68]);
+  const dialRotation = useTransform(smoothProgress, [0, 0.3, 0.7, 1], [120, 90, -90, -120]);
 
   // Breakpoints are deliberately edge-weighted: the 1st and 4th pillar each
   // get 30% of the scroll runway, the two middle ones 20% each. The

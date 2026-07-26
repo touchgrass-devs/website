@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   motion,
   AnimatePresence,
@@ -9,7 +9,12 @@ import {
   useAnimationFrame,
   animate,
 } from 'framer-motion';
-import { Compass, Cpu, Sparkle, ShieldCheck, CaretLeft, CaretRight, Play, Pause } from '@phosphor-icons/react';
+import { Compass, Cpu, Sparkle, ShieldCheck, CaretLeft, CaretRight } from '@phosphor-icons/react';
+import { scaleLinear } from '@visx/scale';
+import { AreaClosed, LinePath } from '@visx/shape';
+import { curveMonotoneX } from '@visx/curve';
+import { LinearGradient } from '@visx/gradient';
+import { GridRows } from '@visx/grid';
 
 const SERVICES = [
   {
@@ -66,8 +71,9 @@ const SERVICES = [
   },
 ];
 
-const ACCENT_RGB = '63, 174, 106';
-const AUTOPLAY_MS = 6000;
+// Set to true to bring the rotating starfish background shapes back - all the
+// code/animation logic stays intact either way, this just toggles rendering.
+const SHOW_STARFISH = false;
 
 // Organic 7-armed starfish shape, built as a closed quadratic B-spline through
 // alternating outer/inner points so every arm and every joint is perfectly rounded.
@@ -140,29 +146,6 @@ function RotatingStarfish({ className, baseAngle, boostAngle }) {
         <path d={STARFISH_PATH} fill="#0f1a16" />
       </motion.svg>
     </motion.div>
-  );
-}
-
-function GlowLayer({ mx, my }) {
-  return (
-    <>
-      <div
-        className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ease-out"
-        style={{
-          background: `radial-gradient(280px circle at ${mx}% ${my}%, rgba(${ACCENT_RGB}, 0.14), transparent 70%)`,
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 rounded-[32px] opacity-0 group-hover:opacity-100 transition-opacity duration-150 ease-out"
-        style={{
-          padding: 1,
-          background: `radial-gradient(280px circle at ${mx}% ${my}%, rgba(${ACCENT_RGB}, 0.9), transparent 70%)`,
-          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-          WebkitMaskComposite: 'xor',
-          maskComposite: 'exclude',
-        }}
-      />
-    </>
   );
 }
 
@@ -408,42 +391,137 @@ function VisualModernization() {
 }
 
 // --- Web Applications & Client Portals ---
+// Dual-series gradient area chart - inspired by the Bklit UI "Area Chart"
+// component (smooth curves, gradient fill fading to transparent, animated
+// reveal). Hand-built with SVG + Framer Motion rather than pulling in
+// @visx/@bklitui as real npm dependencies for one decorative micro-chart -
+// this is the only visual of the 16 rendered flat (no 3D tilt, no fake
+// terminal chrome/header) so it reads as an actual chart, not a mockup.
+const LIVE_WINDOW_MS = 20000; // visible sliding window
+const LIVE_STEP_MS = 700; // how often a new data point arrives
+const LIVE_MOMENTUM_COLORS = { up: '#2e7d4f', down: '#b5533f', flat: '#8a94a0' };
+
+function seedLivePoints() {
+  const now = Date.now();
+  const points = [];
+  let v = 62;
+  for (let t = now - LIVE_WINDOW_MS; t <= now; t += LIVE_STEP_MS) {
+    v = Math.max(20, Math.min(95, v + (Math.random() - 0.5) * 10));
+    points.push({ time: t, value: v });
+  }
+  return points;
+}
+
+// Simulated real-time streaming line chart - inspired by the Bklit UI "Live
+// Line Chart" (sliding time window, smooth interpolation, pulsing live dot,
+// momentum-colored line). Built on the same @visx primitives as the rest of
+// this file (no fake data feed exists to stream from, so a self-ticking
+// random walk stands in for the "real" metric). Hovering pauses the stream -
+// the closest thing to the source component's `paused` prop - and resumes it
+// on mouse-leave.
 function VisualDashboards() {
+  const [points, setPoints] = useState(seedLivePoints);
+  const [now, setNow] = useState(() => Date.now());
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused) return undefined;
+    const dataTimer = setInterval(() => {
+      setPoints((prev) => {
+        const last = prev[prev.length - 1]?.value ?? 60;
+        const next = Math.max(18, Math.min(97, last + (Math.random() - 0.5) * 12));
+        const cutoff = Date.now() - LIVE_WINDOW_MS - LIVE_STEP_MS * 2;
+        return [...prev.filter((p) => p.time >= cutoff), { time: Date.now(), value: next }];
+      });
+    }, LIVE_STEP_MS);
+    const tickTimer = setInterval(() => setNow(Date.now()), 100);
+    return () => {
+      clearInterval(dataTimer);
+      clearInterval(tickTimer);
+    };
+  }, [paused]);
+
+  const width = 340;
+  const height = 210;
+  const margin = { top: 30, right: 14, bottom: 8, left: 10 };
+  const innerW = width - margin.left - margin.right;
+  const innerH = height - margin.top - margin.bottom;
+
+  const visible = points.filter((p) => p.time >= now - LIVE_WINDOW_MS);
+  const xScale = useMemo(
+    () => scaleLinear({ domain: [now - LIVE_WINDOW_MS, now], range: [0, innerW] }),
+    [now, innerW]
+  );
+  const values = visible.map((p) => p.value);
+  const yMin = Math.min(...values, 20);
+  const yMax = Math.max(...values, 95);
+  const yScale = useMemo(
+    () => scaleLinear({ domain: [yMin - 6, yMax + 6], range: [innerH, 0] }),
+    [yMin, yMax, innerH]
+  );
+
+  const latest = points[points.length - 1];
+  const prevValue = points[points.length - 2]?.value ?? latest.value;
+  const momentum = latest.value > prevValue + 0.3 ? 'up' : latest.value < prevValue - 0.3 ? 'down' : 'flat';
+  const color = LIVE_MOMENTUM_COLORS[momentum];
+  const liveX = xScale(latest.time);
+  const liveY = yScale(latest.value);
+
   return (
-    <MockCard>
-      <MockHeader label="Analytics terminal" status="LIVE METRICS" />
-      <div className="flex-1 flex gap-2 items-end justify-between pt-2 min-h-0">
-        <div className="flex items-end gap-1 w-1/2 h-[55px] border-b border-sage-100 pb-0.5">
-          {[35, 70, 50, 95, 60, 85].map((h, i) => (
-            <motion.div
-              key={i}
-              initial={{ height: 0 }}
-              animate={{ height: `${h}%` }}
-              transition={{ duration: 0.6, delay: i * 0.04 }}
-              className="w-2 rounded-t"
-              style={{ backgroundColor: VG, opacity: 0.55 + (h / 100) * 0.45 }}
-            />
-          ))}
-        </div>
-        <div className="w-1/2 flex flex-col items-center justify-center">
-          <div className="relative w-10 h-10 flex items-center justify-center">
-            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 32 32">
-              <circle cx="16" cy="16" r="12" fill="none" stroke="#e5e9e7" strokeWidth="3" />
-              <motion.circle
-                cx="16" cy="16" r="12" fill="none" stroke={VG} strokeWidth="3"
-                strokeDasharray="75"
-                initial={{ strokeDashoffset: 75 }}
-                animate={{ strokeDashoffset: 22 }}
-                transition={{ duration: 0.8 }}
+    <div
+      className="w-full h-full rounded-2xl bg-white overflow-hidden relative flex flex-col p-4"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <div className="flex items-center justify-between mb-2 shrink-0">
+        <div className="flex items-center gap-2 text-[10px] font-mono text-sage-500">
+          <span className="relative flex h-2 w-2">
+            {!paused && (
+              <span
+                className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60"
+                style={{ backgroundColor: color }}
               />
-            </svg>
-            <span className="absolute text-[7px] font-mono text-sage-600">70%</span>
-          </div>
-          <span className="text-[6px] text-sage-400 mt-1 uppercase font-mono">Conversion</span>
+            )}
+            <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: color }} />
+          </span>
+          {paused ? 'Paused' : 'Live requests/sec'}
+        </div>
+        <div className="text-sm font-bold" style={{ color }}>
+          {latest.value.toFixed(1)}
         </div>
       </div>
-      <MockFooter left="SYS_DB: REPLICATED" right="OK" />
-    </MockCard>
+
+      <svg viewBox={`0 0 ${width} ${height}`} className="flex-1 w-full">
+        <defs>
+          <clipPath id="liveClip">
+            <rect x="0" y="0" width={innerW + 4} height={innerH + 20} />
+          </clipPath>
+        </defs>
+        <LinearGradient id="liveLineGrad" from={color} to={color} fromOpacity={0.35} toOpacity={0} />
+        <g transform={`translate(${margin.left},${margin.top})`} clipPath="url(#liveClip)">
+          <GridRows scale={yScale} width={innerW} height={innerH} stroke="#e4e7e9" strokeDasharray="3 4" numTicks={3} />
+          <AreaClosed
+            data={visible}
+            x={(d) => xScale(d.time)}
+            y={(d) => yScale(d.value)}
+            yScale={yScale}
+            curve={curveMonotoneX}
+            fill="url(#liveLineGrad)"
+          />
+          <LinePath data={visible} x={(d) => xScale(d.time)} y={(d) => yScale(d.value)} stroke={color} strokeWidth={2.5} curve={curveMonotoneX} />
+
+          <circle cx={liveX} cy={liveY} r={9} fill={color} opacity={0.25}>
+            {!paused && (
+              <animate attributeName="r" values="6;13;6" dur="1.8s" repeatCount="indefinite" />
+            )}
+            {!paused && (
+              <animate attributeName="opacity" values="0.35;0;0.35" dur="1.8s" repeatCount="indefinite" />
+            )}
+          </circle>
+          <circle cx={liveX} cy={liveY} r={4} fill={color} stroke="#fff" strokeWidth={2} />
+        </g>
+      </svg>
+    </div>
   );
 }
 
@@ -849,29 +927,35 @@ const VISUALS = {
   maintenance: [VisualPerformance, VisualEnhancements, VisualBugFixes, VisualMonitoring],
 };
 
-// Light equivalent of the reference's dark isometric "device stage": a soft dot-grid
-// backing + faint accent glow orb, with the mockup card gently tilted in 3D and
-// carrying its own soft contact shadow, crossfading between sub-services on hover.
+// Light equivalent of the reference's dark isometric "device stage": the mockup
+// card gently tilted in 3D, carrying its own soft contact shadow, crossfading
+// between sub-services on hover. No background fill/border of its own - it sits
+// directly on the card.
 function ServiceVisualStage({ cardId, subIdx }) {
   const Visual = VISUALS[cardId]?.[subIdx] ?? VISUALS[cardId]?.[0];
+  // The dashboards area chart reads as an actual chart, not a device mockup -
+  // render it flat (no isometric tilt) while every other visual keeps the tilt.
+  const isFlat = cardId === 'web-apps' && subIdx === 0;
   return (
     <div className="flex-1 min-h-[220px] lg:min-h-0 rounded-2xl flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <div
-        className="absolute inset-0 opacity-[0.5] pointer-events-none"
-        style={{ backgroundImage: 'radial-gradient(#c9d0cb 1.2px, transparent 1.2px)', backgroundSize: '14px 14px' }}
-      />
-      <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 blur-3xl pointer-events-none rounded-full"
-        style={{ backgroundColor: `${VG}14` }}
-      />
-
       <div className="w-full h-full flex items-center justify-center relative" style={{ perspective: 1000 }}>
         <motion.div
-          animate={{ rotateX: 20, rotateY: -16, rotateZ: 4, scale: 1.5 }}
+          animate={
+            isFlat
+              ? { rotateX: 0, rotateY: 0, rotateZ: 0, scale: 1 }
+              : { rotateX: 10, rotateY: -8, rotateZ: 2, scale: 1.3 }
+          }
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="relative w-full max-w-[270px] aspect-[4/3] flex flex-col items-center justify-center z-10"
+          style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }}
+          className={
+            isFlat
+              ? 'relative w-full h-full flex flex-col items-center justify-center z-10'
+              : 'relative w-full max-w-[270px] aspect-[4/3] flex flex-col items-center justify-center z-10'
+          }
         >
-          <div className="absolute -bottom-4 w-[112%] h-6 bg-black/10 blur-lg rounded-full scale-x-90 pointer-events-none" />
+          {!isFlat && (
+            <div className="absolute -bottom-4 w-[112%] h-6 bg-black/10 blur-lg rounded-full scale-x-90 pointer-events-none" />
+          )}
 
           <AnimatePresence mode="wait">
             <motion.div
@@ -904,10 +988,7 @@ export default function Services() {
   // 'sliding' -> the (now-circle) items reflow into their new order, still all circles.
   // Only once back at 'idle' does whichever item lands in the card slot grow into the card.
   const [phase, setPhase] = useState('idle');
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [mousePos, setMousePos] = useState({ x: 50, y: 30 });
   const reduceMotion = useReducedMotion();
-  const autoplayRef = useRef(null);
   const stepTimeouts = useRef([]);
   // Id of the item making the long end-to-end jump this transition (set right before
   // the reorder fires), so it alone gets the extra "hop" arc during the slide phase.
@@ -969,31 +1050,14 @@ export default function Services() {
   };
 
   const next = () => {
-    setIsPlaying(false);
     advance(rotateRight, (order) => order[3]);
   };
 
   const prev = () => {
-    setIsPlaying(false);
     advance(rotateLeft, (order) => order[0]);
   };
 
   useEffect(() => clearStepTimeouts, []);
-
-  useEffect(() => {
-    if (reduceMotion || !isPlaying) return undefined;
-    autoplayRef.current = setInterval(() => advance(rotateRight, (order) => order[3]), AUTOPLAY_MS);
-    return () => clearInterval(autoplayRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPlaying, reduceMotion, phase]);
-
-  const handleMouseMove = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMousePos({
-      x: ((e.clientX - rect.left) / rect.width) * 100,
-      y: ((e.clientY - rect.top) / rect.height) * 100,
-    });
-  };
 
   return (
     <section
@@ -1015,23 +1079,26 @@ export default function Services() {
 
       {/* Two large starfish shapes, each tucked mostly off-canvas so only one quadrant
           shows in the corner - they idle-spin slowly and complete one full extra
-          rotation over the course of every card switch */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <RotatingStarfish
-          className="w-[640px] -top-[320px] -right-[320px] md:w-[940px] md:-top-[470px] md:-right-[470px] opacity-90"
-          baseAngle={starfishA.baseAngle}
-          boostAngle={starfishA.boostAngle}
-        />
-        <RotatingStarfish
-          className="w-[560px] -bottom-[280px] -left-[280px] md:w-[820px] md:-bottom-[410px] md:-left-[410px] opacity-90"
-          baseAngle={starfishB.baseAngle}
-          boostAngle={starfishB.boostAngle}
-        />
-      </div>
+          rotation over the course of every card switch.
+          Temporarily hidden - flip SHOW_STARFISH back to true to bring them back. */}
+      {SHOW_STARFISH && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <RotatingStarfish
+            className="w-[640px] -top-[320px] -right-[320px] md:w-[940px] md:-top-[470px] md:-right-[470px] opacity-90"
+            baseAngle={starfishA.baseAngle}
+            boostAngle={starfishA.boostAngle}
+          />
+          <RotatingStarfish
+            className="w-[560px] -bottom-[280px] -left-[280px] md:w-[820px] md:-bottom-[410px] md:-left-[410px] opacity-90"
+            baseAngle={starfishB.baseAngle}
+            boostAngle={starfishB.boostAngle}
+          />
+        </div>
+      )}
 
       <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 md:px-10 relative z-10">
         {/* Section header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 md:mb-8">
+        <div className="mb-6 md:mb-8">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
               <span className="w-1.5 h-1.5 rounded-full bg-gold-accent" />
@@ -1046,10 +1113,6 @@ export default function Services() {
               </span>
             </h2>
           </div>
-          <p className="text-xs md:text-sm text-sage-600 font-light max-w-sm leading-relaxed md:pb-1">
-            From marketing sites to internal tools to AI workflows, we design, build, and
-            support every layer so nothing falls through the cracks.
-          </p>
         </div>
 
         {/* Circle + card carousel - fixed-height stage so the section never collapses
@@ -1075,68 +1138,67 @@ export default function Services() {
                     ? { duration: SLIDE_MS / 1000, times: [0, 0.5, 1], ease: 'easeOut' }
                     : { duration: 0 },
                 }}
-                onMouseMove={isCard ? handleMouseMove : undefined}
                 aria-live={isCard ? 'polite' : undefined}
                 className={
                   isCard
-                    ? 'group relative w-full md:flex-1 lg:min-w-[660px] h-[460px] sm:h-[480px] md:h-[520px] rounded-[32px] bg-white border border-grass-accent-light/40 shadow-2xl overflow-hidden'
+                    ? 'group relative w-full md:flex-1 lg:min-w-[660px] h-[460px] sm:h-[480px] md:h-[520px] rounded-[32px] border border-grass-accent-light/40 shadow-2xl overflow-hidden'
                     : 'group relative shrink-0 w-16 h-16 rounded-[32px] bg-sage-950 border border-sage-900 shadow-md overflow-hidden'
                 }
               >
-                {isCard && (
-                  <>
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        backgroundImage: 'radial-gradient(rgba(30,41,37,0.08) 1px, transparent 1px)',
-                        backgroundSize: '14px 14px',
-                      }}
-                    />
-                    <div className="absolute w-[60%] h-[60%] rounded-full bg-grass-accent-light/10 blur-3xl top-[-15%] right-[-10%]" />
-                    <GlowLayer mx={mousePos.x} my={mousePos.y} />
-                  </>
-                )}
-
                 {/* Gloss reflection overlay, on both circles and the card - same 32px radius as the
                     card itself so Framer never has to interpolate border-radius across the morph */}
                 <div className="pointer-events-none absolute inset-0 rounded-[32px] bg-gradient-to-tr from-transparent via-white/5 to-white/15 z-10" />
 
-                <AnimatePresence mode="wait" initial={false}>
-                  {isCard ? (
+                {/* Circle icon: always mounted (never unmounts/remounts), just crossfades its own
+                    opacity in/out of sync with isCard. Keeping it out of AnimatePresence's mount/
+                    unmount cycle avoids a race with the parent's own `layout` shrink/grow animation
+                    that could otherwise leave the icon stuck at a stale, near-invisible scale. */}
+                <motion.div
+                  className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
+                  animate={{ opacity: isCard ? 0 : 1 }}
+                  transition={{ duration: 0.18, ease: 'easeOut', delay: isCard ? 0 : 0.15 }}
+                >
+                  <Icon size={20} weight="duotone" className="text-sage-300" />
+                </motion.div>
+
+                <AnimatePresence initial={false}>
+                  {isCard && (
                     <motion.div
                       key="card"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0, transition: { duration: 0.1 } }}
                       transition={{ duration: 0.22, ease: 'easeOut', delay: 0.08 }}
-                      className="relative z-20 h-full flex flex-col lg:flex-row gap-6 lg:gap-8 px-7 py-6 sm:px-9 sm:py-7 md:px-11 md:py-8"
+                      className="relative z-30 h-full flex flex-col lg:flex-row gap-6 lg:gap-8 px-7 py-6 sm:px-9 sm:py-7 md:px-11 md:py-8"
                     >
                       {/* Left: category info + 2x2 sub-service grid */}
-                      <div className="flex flex-col lg:w-[52%] lg:shrink-0 min-h-0">
-                        <Icon size={32} weight="duotone" className="text-sage-950 shrink-0" />
+                      <div className="flex flex-col lg:h-full lg:w-[52%] lg:shrink-0 min-h-0">
+                        <Icon size={36} weight="duotone" className="text-sage-950 shrink-0" />
 
-                        <h3 className="mt-4 text-xl sm:text-2xl md:text-[1.6rem] font-sans font-bold text-sage-950 tracking-tight leading-tight">
+                        <h3 className="mt-4 text-2xl sm:text-3xl md:text-[1.9rem] font-sans font-bold text-sage-950 tracking-tight leading-tight">
                           {svc.title}
                         </h3>
-                        <p className="mt-2.5 text-xs sm:text-sm text-sage-500 font-light leading-relaxed">
+                        <p className="mt-1 text-sm sm:text-base text-sage-500 font-light leading-relaxed">
                           {svc.description}
                         </p>
 
-                        <div className="mt-5 h-px w-full bg-luxury-border" />
+                        <div className="mt-6 h-px w-full bg-luxury-border" />
 
-                        <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-5 overflow-y-auto">
+                        <div className="mt-5 flex-1 grid grid-cols-2 gap-1.5 content-center">
                           {svc.subServices.map((sub, subIdx) => (
                             <div
                               key={sub.title}
                               onMouseEnter={() => setHoveredSubIdx(subIdx)}
-                              className="flex items-start gap-2.5"
+                              className="relative rounded-xl"
                             >
-                              <CaretRight
-                                size={12}
-                                weight="bold"
-                                className="text-grass-accent mt-[4px] shrink-0"
-                              />
-                              <div>
+                              {hoveredSubIdx === subIdx && (
+                                <motion.div
+                                  layoutId="subHighlight"
+                                  className="absolute inset-0 rounded-xl bg-sage-100"
+                                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                                />
+                              )}
+                              <div className="relative z-10 px-3 py-2.5">
                                 <div className="text-xs sm:text-[13px] font-sans font-bold text-sage-950 leading-snug">
                                   {sub.title}
                                 </div>
@@ -1151,17 +1213,6 @@ export default function Services() {
 
                       {/* Right: hover-reactive motion graphic - swaps per sub-service row hovered */}
                       <ServiceVisualStage cardId={svc.id} subIdx={hoveredSubIdx} />
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="circle"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, transition: { duration: 0.1 } }}
-                      transition={{ duration: 0.22, ease: 'easeOut', delay: 0.08 }}
-                      className="relative z-20 w-full h-full flex items-center justify-center"
-                    >
-                      <Icon size={20} weight="duotone" className="text-sage-300" />
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1180,15 +1231,6 @@ export default function Services() {
               className="p-1 text-sage-700 hover:text-grass-accent transition-colors duration-150"
             >
               <CaretLeft size={18} weight="bold" />
-            </button>
-
-            <button
-              type="button"
-              aria-label={isPlaying ? 'Pause autoplay' : 'Play autoplay'}
-              onClick={() => setIsPlaying((p) => !p)}
-              className="w-9 h-9 rounded-full flex items-center justify-center bg-sage-950 text-white hover:bg-sage-900 transition-colors duration-150 shadow-sm"
-            >
-              {isPlaying ? <Pause size={14} weight="fill" /> : <Play size={14} weight="fill" className="ml-0.5" />}
             </button>
 
             <button

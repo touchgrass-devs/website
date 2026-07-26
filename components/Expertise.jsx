@@ -1,7 +1,8 @@
 'use client';
 
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Code, Database, Sparkle, Wrench } from '@phosphor-icons/react';
+import MacDock from './MacDock';
 
 // Categories fold in the two capabilities that have no brand logo of their own
 // (REST API integration, workflow automation) into the AI & Automation blurb,
@@ -29,119 +30,11 @@ const CATEGORIES = [
   },
 ];
 
-// Real brand marks via Simple Icons' CDN (returns each logo in its own brand
-// color) so the loop reads as genuine tool recognition, not invented glyphs.
-// OpenAI is the one exception — it was delisted from Simple Icons over a
-// trademark dispute, so that single mark is served via Iconify instead.
-const LOGOS = [
-  { name: 'React', src: 'https://cdn.simpleicons.org/react' },
-  { name: 'Next.js', src: 'https://cdn.simpleicons.org/nextdotjs' },
-  { name: 'JavaScript', src: 'https://cdn.simpleicons.org/javascript' },
-  { name: 'HTML5', src: 'https://cdn.simpleicons.org/html5' },
-  { name: 'CSS3', src: 'https://cdn.simpleicons.org/css' },
-  { name: 'Tailwind CSS', src: 'https://cdn.simpleicons.org/tailwindcss' },
-  { name: 'GSAP', src: 'https://cdn.simpleicons.org/greensock' },
-  { name: 'Three.js', src: 'https://cdn.simpleicons.org/threedotjs' },
-  { name: 'Node.js', src: 'https://cdn.simpleicons.org/nodedotjs' },
-  { name: 'Express.js', src: 'https://cdn.simpleicons.org/express' },
-  { name: 'Firebase', src: 'https://cdn.simpleicons.org/firebase' },
-  { name: 'Supabase', src: 'https://cdn.simpleicons.org/supabase' },
-  { name: 'MySQL', src: 'https://cdn.simpleicons.org/mysql' },
-  { name: 'OpenAI', src: 'https://api.iconify.design/simple-icons/openai.svg?color=%23000000' },
-  { name: 'Anthropic', src: 'https://cdn.simpleicons.org/anthropic' },
-  { name: 'Google Gemini', src: 'https://cdn.simpleicons.org/googlegemini' },
-  { name: 'Git', src: 'https://cdn.simpleicons.org/git' },
-  { name: 'GitHub', src: 'https://cdn.simpleicons.org/github' },
-  { name: 'Figma', src: 'https://cdn.simpleicons.org/figma' },
-  { name: 'Vercel', src: 'https://cdn.simpleicons.org/vercel' },
-  { name: 'Netlify', src: 'https://cdn.simpleicons.org/netlify' },
-];
-
-function LogoLoop() {
-  const reduce = useReducedMotion();
-  // Two copies back-to-back; the track animates exactly -50% for a seamless loop.
-  const track = [...LOGOS, ...LOGOS];
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.96 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true, margin: '-60px' }}
-      transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-      className="relative mt-14 md:mt-16"
-    >
-      {/* Edge fade so logos dissolve in/out rather than hard-cutting.
-          Extra top padding (vs. a symmetric py-3) reserves room for the
-          hover label so it isn't clipped by this element's own overflow-hidden. */}
-      <div
-        className="logo-loop-mask overflow-hidden pt-9 pb-3"
-      >
-        <span className="sr-only">
-          Technologies we work with: {LOGOS.map((l) => l.name).join(', ')}.
-        </span>
-        <div
-          aria-hidden="true"
-          className={`logo-loop-track flex items-center w-max gap-14 sm:gap-16 md:gap-20 ${
-            reduce ? '' : 'animate-logo-loop'
-          }`}
-        >
-          {track.map((logo, i) => (
-            <div key={`${logo.name}-${i}`} className="group/logo relative shrink-0 flex items-center justify-center">
-              {/* Hover label: plain text, no chip/background — same quiet
-                  reveal-on-hover treatment used on the collapsed Services cards. */}
-              <span className="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap text-[10px] font-mono uppercase tracking-widest text-sage-700 opacity-0 transition-opacity duration-200 ease-out group-hover/logo:opacity-100">
-                {logo.name}
-              </span>
-
-              <img
-                src={logo.src}
-                alt=""
-                draggable={false}
-                className="h-6 sm:h-7 md:h-8 w-auto grayscale opacity-50 transition-all duration-300 ease-out group-hover/logo:grayscale-0 group-hover/logo:opacity-100 group-hover/logo:scale-110"
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <style jsx>{`
-        .logo-loop-mask {
-          -webkit-mask-image: linear-gradient(
-            to right,
-            transparent,
-            black 8%,
-            black 92%,
-            transparent
-          );
-          mask-image: linear-gradient(
-            to right,
-            transparent,
-            black 8%,
-            black 92%,
-            transparent
-          );
-        }
-        .animate-logo-loop {
-          animation: logo-loop 48s linear infinite;
-        }
-        @keyframes logo-loop {
-          from {
-            transform: translateX(0);
-          }
-          to {
-            transform: translateX(-50%);
-          }
-        }
-      `}</style>
-    </motion.div>
-  );
-}
-
 export default function Expertise() {
   return (
     <section
       id="expertise"
-      className="relative py-24 md:py-32 bg-luxury-bg border-t border-luxury-border overflow-hidden scroll-mt-24"
+      className="relative py-24 md:py-32 bg-luxury-bg overflow-hidden scroll-mt-24"
     >
       {/* Ambient orbs, matching the hero/tech-stack motif elsewhere on the page */}
       <div className="absolute top-[10%] right-[-12%] w-[420px] h-[420px] rounded-full bg-gold-accent/5 premium-blur-orb pointer-events-none" />
@@ -188,8 +81,9 @@ export default function Expertise() {
           })}
         </div>
 
-        {/* Logo loop: the tools behind the categories above */}
-        <LogoLoop />
+        {/* Premium interactive macOS Dock Stack — ported from the "kay" project's
+            Expertise section in full, replacing the earlier TechMarquee treatment. */}
+        <MacDock />
       </div>
     </section>
   );

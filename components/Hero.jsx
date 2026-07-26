@@ -115,6 +115,10 @@ export default function Hero() {
           animate="visible"
           className="relative z-20 flex flex-col items-center justify-center text-center my-auto max-w-3xl mx-auto px-2 pointer-events-none"
         >
+          {/* Two-line headline, each line revealing with the mask-wipe
+              (lineVariants, overflow-hidden strip). Restored to the
+              original copy - "Touchgrass.DEVS" + a cycling tagline briefly
+              replaced this, but was reverted on request; see notes.md. */}
           <h1 className="text-4xl sm:text-5xl md:text-7xl font-sans tracking-tight text-sage-900 leading-[1.1]">
             <span className="block overflow-hidden">
               <motion.span variants={lineVariants} className="font-light text-sage-500 block mb-2">
@@ -122,19 +126,11 @@ export default function Hero() {
               </motion.span>
             </span>
             <span className="block overflow-hidden">
-              <motion.span variants={lineVariants} className="font-bold italic block text-sage-950 pb-1">
+              <motion.span variants={lineVariants} className="font-bold italic block text-sage-950 pb-2">
                 Modern Design
               </motion.span>
             </span>
           </h1>
-
-          <motion.p
-            variants={childVariants}
-            className="mt-6 text-sm sm:text-base text-sage-600 font-light leading-relaxed max-w-xl"
-          >
-            We&rsquo;re a four-person team building polished marketing sites, powerful web
-            applications, and AI-driven workflows — fast, reliable, and genuinely enjoyable to use.
-          </motion.p>
 
           <motion.div variants={childVariants} className="mt-8 pointer-events-auto">
             <motion.a
