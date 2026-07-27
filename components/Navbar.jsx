@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence, LayoutGroup, useReducedMotion } from 'framer-motion';
 import { List, X, Terminal } from '@phosphor-icons/react';
 
@@ -16,10 +16,7 @@ const MENU_ITEMS = [
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [hidden, setHidden] = useState(false);
   const [activeSection, setActiveSection] = useState('');
-  const lastY = useRef(0);
   const reduce = useReducedMotion();
 
   // In-page nav now routes through Lenis (`window.__lenis`, set by
@@ -46,31 +43,6 @@ export default function Navbar() {
     }
   };
 
-  // Background swap + direction-aware hide/reveal. Nav only hides once it's
-  // past its own height, and never while the mobile drawer is open.
-  useEffect(() => {
-    lastY.current = window.scrollY;
-
-    const handleScroll = () => {
-      const y = window.scrollY;
-      setScrolled(y > 30);
-
-      const delta = y - lastY.current;
-      if (y < 96) {
-        setHidden(false);
-      } else if (delta > 4) {
-        setHidden(true);
-      } else if (delta < -4) {
-        setHidden(false);
-      }
-      lastY.current = y;
-    };
-
-    handleScroll();
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
   // Scroll-spy: whichever section sits in the middle band of the viewport
   // becomes "active" so the underline can track it.
   useEffect(() => {
@@ -92,15 +64,9 @@ export default function Navbar() {
   }, []);
 
   return (
-    <motion.header
+    <header
       id="navbar"
-      animate={{ y: isOpen ? 0 : hidden ? '-100%' : 0 }}
-      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      className={`fixed top-0 left-0 w-full z-50 transition-colors duration-500 ${
-        scrolled
-          ? 'py-3.5 bg-white/80 backdrop-blur-md border-b border-luxury-border shadow-sm'
-          : 'py-5 bg-transparent border-b border-transparent'
-      }`}
+      className="fixed top-0 left-0 w-full z-50 py-4 bg-white/25 backdrop-blur-lg border-b border-white/30"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 flex items-center justify-between">
         {/* Brand mark */}
@@ -193,6 +159,6 @@ export default function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.header>
+    </header>
   );
 }

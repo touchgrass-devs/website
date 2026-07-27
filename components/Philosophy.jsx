@@ -11,7 +11,6 @@ import {
   useTransform,
 } from 'framer-motion';
 import { Hammer, Gauge, Coins, Eye } from '@phosphor-icons/react';
-import PhilosophyDotGrid from './PhilosophyDotGrid';
 import PhilosophyDial from './PhilosophyDial';
 
 // Fourth pass on this section's mechanism. The prior radial-dial build (a
@@ -170,41 +169,14 @@ export default function Philosophy() {
   const active = PILLARS[activeIndex] ?? PILLARS[0];
 
   return (
-    <section id="philosophy" className="relative bg-white border-t border-luxury-border scroll-mt-24">
-      {/* Interactive dot-grid backdrop. Was `absolute inset-0` against this
-          section, which - once the pinned track inflates the section to
-          several thousand px tall - meant the canvas was tied to a
-          DOCUMENT position, not the viewport: it visibly slid upward past
-          the sticky dial the entire time the dial was pinned, since nothing
-          about `absolute` keeps an element still while its tall ancestor
-          scrolls underneath it. Fixed with the standard "sticky background"
-          trick instead of a section-wide absolute layer: `sticky top-0
-          h-screen` pins this div to the viewport for as long as any part of
-          the (taller-than-one-viewport) section is being scrolled through,
-          and `-mb-[100vh]` cancels its own height out of the section's
-          normal-flow layout so it doesn't push the header/track/quote down
-          by an extra viewport's worth of space. Net effect: the grid enters
-          once at the top of the section and simply does not move again
-          until the section's bottom finally clears the viewport - it reads
-          as a fixed backdrop the whole time you're scrolling through
-          Philosophy, dial included, instead of a layer gliding by behind a
-          still dial. Still a sibling of the `pointer-events-none` content
-          wrapper below (not a descendant of it), so it keeps receiving
-          hover/click without needing its own `pointer-events-auto` override
-          - same reasoning already documented the first time this bug class
-          showed up in this file. */}
-      <div className="sticky top-0 h-screen -mb-[100vh] z-0">
-        <PhilosophyDotGrid className="absolute inset-0" reduce={!!reduce} />
-      </div>
-
-      {/* `pointer-events-none` here (and re-enabled only on the actual
-          interactive pieces below) is what lets hover reach the dot grid
-          underneath - same pattern Hero.jsx already uses for its own
-          dot-grid layer. Without it, this wrapper's box (inflated to the
-          section's full height by the pinned track's `h-[340vh]` child)
-          sat directly on top of the whole dot grid at z-10 and silently
-          absorbed every pointer event before it could reach the canvas. */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 relative z-10 py-24 md:py-28 pointer-events-none">
+    // Dark-themed per request: `sage-800` rather than `sage-900`/`sage-950` -
+    // a proper dark charcoal, deliberately stopping short of near-black so
+    // the section reads as "dark," not "void." Border-t swapped from the
+    // light-mode `luxury-border` (a black hairline, invisible on a dark
+    // fill) to a white-based one at the same low opacity - same visual
+    // weight as before, just inverted for the new background.
+    <section id="philosophy" className="relative bg-sage-800 border-t border-white/10 scroll-mt-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 relative z-10 py-24 md:py-28">
         {/* Header - one eyebrow here (Services already used the page's
             other one; two total across five sections is within the
             max-1-per-3 budget). */}
@@ -221,11 +193,17 @@ export default function Philosophy() {
               Our Philosophy
             </span>
           </div>
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-sans tracking-tight text-sage-950 leading-[1.1]">
-            <span className="font-light text-sage-500 block mb-1">Before the pixels,</span>
+          {/* Three-way text differentiation carried over from the light
+              version, remapped for the dark fill: gold stays gold (already
+              reads fine against dark), the old "black, thick" role becomes
+              white/thick, the old "grey, thin" role becomes a dimmer
+              mid-grey (`sage-400`) - same relative hierarchy, different
+              absolute colors. */}
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-sans tracking-tight text-white leading-[1.1]">
+            <span className="font-light text-sage-400 block mb-1">Before the pixels,</span>
             <span className="font-bold italic block pb-1">the ground rules.</span>
           </h2>
-          <p className="mt-6 text-xs md:text-sm text-sage-600 font-light max-w-xl leading-relaxed">
+          <p className="mt-6 text-xs md:text-sm text-sage-400 font-light max-w-xl leading-relaxed">
             Four commitments run underneath everything we build.{' '}
             {pinned ? 'Keep scrolling to turn the dial through them.' : 'No exceptions, no fine print, regardless of project size.'}
           </p>
@@ -257,17 +235,17 @@ export default function Philosophy() {
                           <span
                             key={i}
                             className={`h-[3px] rounded-full transition-all duration-500 ease-out ${
-                              i === activeIndex ? 'w-7 bg-gold-accent' : 'w-2 bg-sage-200'
+                              i === activeIndex ? 'w-7 bg-gold-accent' : 'w-2 bg-sage-600'
                             }`}
                           />
                         ))}
                       </div>
-                      <span className="text-xs uppercase tracking-[0.2em] text-sage-500 font-semibold">
+                      <span className="text-xs uppercase tracking-[0.2em] text-sage-400 font-semibold">
                         {active.tag}
                       </span>
                     </div>
-                    <h3 className="text-2xl md:text-3xl font-sans font-bold tracking-tight text-sage-950">{active.title}</h3>
-                    <p className="text-sm md:text-base text-sage-600 font-light leading-relaxed max-w-xl mx-auto">{active.body}</p>
+                    <h3 className="text-2xl md:text-3xl font-sans font-bold tracking-tight text-white">{active.title}</h3>
+                    <p className="text-sm md:text-base text-sage-400 font-light leading-relaxed max-w-xl mx-auto">{active.body}</p>
                   </motion.div>
                 </AnimatePresence>
               </div>
@@ -281,7 +259,7 @@ export default function Philosophy() {
               />
             </div>
           ) : (
-            <div className="w-full flex flex-col gap-5 py-2 pointer-events-auto">
+            <div className="w-full flex flex-col gap-5 py-2">
               {PILLARS.map((pillar, i) => {
                 const Icon = pillar.icon;
                 return (
@@ -291,18 +269,18 @@ export default function Philosophy() {
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: '-60px' }}
                     transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
-                    className="rounded-[24px] border border-luxury-border bg-white shadow-sm p-7 md:p-8"
+                    className="rounded-[24px] border border-white/10 bg-sage-900 p-7 md:p-8"
                   >
-                    <div className="flex items-center gap-2 pb-4 mb-6 border-b border-luxury-border">
-                      <span className="w-1.5 h-1.5 rounded-full bg-grass-accent" />
-                      <Icon size={13} weight="bold" className="text-sage-500" />
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-sage-500">{pillar.tag}</span>
+                    <div className="flex items-center gap-2 pb-4 mb-6 border-b border-white/10">
+                      <span className="w-1.5 h-1.5 rounded-full bg-grass-accent-light" />
+                      <Icon size={13} weight="bold" className="text-sage-400" />
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-sage-400">{pillar.tag}</span>
                     </div>
-                    <span className="font-mono text-4xl text-sage-200 leading-none select-none">
+                    <span className="font-mono text-4xl text-sage-700 leading-none select-none">
                       {String(i + 1).padStart(2, '0')}
                     </span>
-                    <h3 className="mt-3 font-sans text-lg md:text-xl font-bold text-sage-950 tracking-tight">{pillar.title}</h3>
-                    <p className="mt-3 text-xs md:text-sm text-sage-600 font-light leading-relaxed">{pillar.body}</p>
+                    <h3 className="mt-3 font-sans text-lg md:text-xl font-bold text-white tracking-tight">{pillar.title}</h3>
+                    <p className="mt-3 text-xs md:text-sm text-sage-400 font-light leading-relaxed">{pillar.body}</p>
                   </motion.div>
                 );
               })}
@@ -316,7 +294,7 @@ export default function Philosophy() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-80px' }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="mt-16 md:mt-20 text-center text-lg sm:text-xl md:text-2xl font-sans italic font-light text-sage-800 leading-relaxed max-w-3xl mx-auto pb-1"
+          className="mt-16 md:mt-20 text-center text-lg sm:text-xl md:text-2xl font-sans italic font-light text-sage-200 leading-relaxed max-w-3xl mx-auto pb-1"
         >
           Great software is not just functional. It&rsquo;s intuitive, refined, and built to
           last.

@@ -51,16 +51,16 @@ function DialNode({ pillar, idx, isActive, rotation, onSelect, reduce }) {
         aria-label={pillar.title}
         style={{ rotate: itemRotation }}
         whileTap={reduce ? undefined : { scale: 0.94 }}
-        className={`group relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full border shadow-sm transition-colors duration-300 cursor-pointer pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent ${
+        className={`group relative flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-full border shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-300 cursor-pointer pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent ${
           isActive
-            ? 'bg-sage-950 border-gold-accent shadow-md shadow-gold-accent/15'
-            : 'bg-white border-luxury-border hover:border-gold-accent/40 hover:bg-sage-50/50'
+            ? 'bg-sage-800 border-gold-accent shadow-[0_0_0_1px_rgba(196,162,101,0.2)]'
+            : 'bg-sage-800 border-white/20 hover:border-gold-accent/40'
         }`}
       >
         <Icon
           size={20}
           weight="bold"
-          className={`transition-colors duration-300 ${isActive ? 'text-gold-accent' : 'text-sage-400 group-hover:text-sage-700'}`}
+          className={`transition-colors duration-300 ${isActive ? 'text-gold-accent' : 'text-sage-400 group-hover:text-sage-200'}`}
         />
         <span
           className={`absolute -bottom-7 left-1/2 -translate-x-1/2 font-mono text-[9px] tracking-wider whitespace-nowrap transition-all duration-300 ${
@@ -109,11 +109,14 @@ export default function PhilosophyDial({ pillars, activeIndex, rotation, onSelec
       >
         <motion.div
           style={{ rotate: rotation }}
-          className="relative w-full h-full rounded-full bg-gradient-to-b from-sage-50/80 via-white to-white border border-luxury-border shadow-[inset_0_4px_24px_rgba(0,0,0,0.01),0_8px_32px_rgba(0,0,0,0.03)] origin-center"
+          className="relative w-full h-full rounded-full bg-sage-800 border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-1px_16px_rgba(0,0,0,0.35)] origin-center"
         >
-          <svg className="w-full h-full pointer-events-none select-none text-sage-300" viewBox="0 0 600 600">
-            <circle cx="300" cy="300" r="280" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-sage-100" />
-            <circle cx="300" cy="300" r="290" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-sage-100/60" />
+          {/* Ticks/guide circles are the "mini markings" - flat-fill dial
+              now matches the section bg, so these need to be light-based to
+              read as contrast rather than the old dark-on-light scheme. */}
+          <svg className="w-full h-full pointer-events-none select-none text-white" viewBox="0 0 600 600">
+            <circle cx="300" cy="300" r="280" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white/10" />
+            <circle cx="300" cy="300" r="290" fill="none" stroke="currentColor" strokeWidth="0.5" className="text-white/5" />
             {TICKS.map((t) => (
               <line
                 key={t.key}
@@ -123,7 +126,7 @@ export default function PhilosophyDial({ pillars, activeIndex, rotation, onSelec
                 y2={t.y2}
                 stroke="currentColor"
                 strokeWidth={t.isMajor ? 1.5 : t.isMedium ? 1.0 : 0.75}
-                className={t.isMajor ? 'text-sage-400' : 'text-sage-200/50'}
+                className={t.isMajor ? 'text-white/50' : 'text-white/15'}
               />
             ))}
           </svg>
